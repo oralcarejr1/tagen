@@ -8,6 +8,8 @@ public struct TimeoutError: Error, Sendable, Equatable, CustomStringConvertible 
 }
 
 /// Run `operation` with a deadline. The operation is cancelled when the deadline passes.
+/// The body MUST react to cancellation (task groups await all children), e.g. continuations
+/// must be wrapped in `withTaskCancellationHandler`.
 public func withTimeout<T: Sendable>(
     seconds: Double,
     operation name: String = "operation",

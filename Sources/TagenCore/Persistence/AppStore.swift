@@ -28,6 +28,12 @@ public struct AgentSessionRecord: Sendable, Equatable, Identifiable {
     public var resultSummary: String?
     public var createdAt: Date
     public var updatedAt: Date
+    public init(id: UUID, provider: String, externalSessionID: String?, title: String, workingDirectory: String, status: String,
+                lastError: String?, resultSummary: String?, createdAt: Date, updatedAt: Date) {
+        self.id = id; self.provider = provider; self.externalSessionID = externalSessionID; self.title = title
+        self.workingDirectory = workingDirectory; self.status = status; self.lastError = lastError
+        self.resultSummary = resultSummary; self.createdAt = createdAt; self.updatedAt = updatedAt
+    }
 }
 
 /// Application persistence. Stores conversation text, agent sessions, settings and the

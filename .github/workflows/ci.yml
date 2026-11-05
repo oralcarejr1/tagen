@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-core:
+    name: Linux — core + agent bridge tests
+    runs-on: ubuntu-24.04
+    container: swift:6.2-noble
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends libsqlite3-dev python3
+      - name: Toolchain
+        run: swift --version
+      - name: Build (with tests)
+        run: swift build --build-tests 2>&1 | tee build-linux.log
+      - name: Test
+        run: |
+          set -o pipefail
+          mkdir -p test-results
+          swift test --skip-build --xunit-output test-results/linux-xunit.xml 2>&1 | tee test-results/linux-test.log
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-results
+          path: |
+            test-results/
+            build-linux.log
+
+  macos:
+    name: macOS — build, test, package
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: |
+          ls -d /Applications/Xcode*.app || true
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE/Contents/Developer"; fi
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+          sw_vers
+      - name: Build (debug, with tests)
+        run: |
+          set -o pipefail
+          swift build --build-tests 2>&1 | tee build-macos.log
+      - name: Unit + integration tests
+        run: |
+          set -o pipefail
+          mkdir -p test-results
+          swift test --skip-build --xunit-output test-results/macos-xunit.xml 2>&1 | tee test-results/macos-test.log
+      - name: Package development app bundle
+        run: |
+          set -o pipefail
+          scripts/macos/package-app.sh 2>&1 | tee package.log
+      - name: Verify bundle
+        run: scripts/macos/verify-bundle.sh dist/Tagen.app
+      - name: Launch smoke test
+        run: |
+          set -o pipefail
+          scripts/macos/smoke-launch.sh dist/Tagen.app 2>&1 | tee test-results/smoke-launch.log
+      - name: Live GUI check (fixture app, uses runner's existing permissions only)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          scripts/macos/live-gui-check.sh 2>&1 | tee test-results/live-gui-check.log
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-test-results
+          path: |
+            test-results/
+            build-macos.log
+            package.log
+      - name: Upload development build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tagen-dev-build
+          path: |
+            dist/Tagen.zip
+            dist/TagenFixture.zip
+            dist/tagen-gui-check
+            dist/BUILD-INFO.txt
