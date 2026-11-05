@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -23,12 +27,14 @@ jobs:
       - name: Toolchain
         run: swift --version
       - name: Build (with tests)
-        run: swift build --build-tests 2>&1 | tee build-linux.log
+        run: |
+          set -o pipefail
+          swift build --build-tests 2>&1 | tee build-linux.log || { echo "=== COMPILE ERRORS ==="; grep -E "error:" build-linux.log | sort -u | head -150; exit 1; }
       - name: Test
         run: |
           set -o pipefail
           mkdir -p test-results
-          swift test --skip-build --xunit-output test-results/linux-xunit.xml 2>&1 | tee test-results/linux-test.log
+          swift test --skip-build --xunit-output test-results/linux-xunit.xml 2>&1 | tee test-results/linux-test.log || { echo "=== FAILURES ==="; grep -E "error:|failed|Fatal" test-results/linux-test.log | head -150; exit 1; }
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,12 +62,12 @@ jobs:
       - name: Build (debug, with tests)
         run: |
           set -o pipefail
-          swift build --build-tests 2>&1 | tee build-macos.log
+          swift build --build-tests 2>&1 | tee build-macos.log || { echo "=== COMPILE ERRORS ==="; grep -E "error:" build-macos.log | sort -u | head -150; exit 1; }
       - name: Unit + integration tests
         run: |
           set -o pipefail
           mkdir -p test-results
-          swift test --skip-build --xunit-output test-results/macos-xunit.xml 2>&1 | tee test-results/macos-test.log
+          swift test --skip-build --xunit-output test-results/macos-xunit.xml 2>&1 | tee test-results/macos-test.log || { echo "=== FAILURES ==="; grep -E "error:|failed|Fatal" test-results/macos-test.log | head -150; exit 1; }
       - name: Package development app bundle
         run: |
           set -o pipefail

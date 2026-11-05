@@ -5,6 +5,7 @@ import AppKit
 // Every control has a stable accessibility identifier. With `--truth <path>` it writes the
 // true on-screen frames of its controls (global, top-left origin) as JSON after layout.
 
+@MainActor
 final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow!
     let countLabel = NSTextField(labelWithString: "Count: 0")
@@ -148,11 +149,13 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
 
 final class FlippedView: NSView { override var isFlipped: Bool { true } }
 
-let app = NSApplication.shared
-let controller = FixtureController()
-app.delegate = controller
-app.setActivationPolicy(.regular)
-app.run()
+MainActor.assumeIsolated {
+    let app = NSApplication.shared
+    let controller = FixtureController()
+    app.delegate = controller
+    app.setActivationPolicy(.regular)
+    withExtendedLifetime(controller) { app.run() }
+}
 #else
 print("TagenFixtureApp runs on macOS only.")
 #endif
