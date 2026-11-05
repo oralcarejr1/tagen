@@ -162,12 +162,17 @@ struct VoiceButton: View {
         HStack(spacing: 4) {
             Image(systemName: icon).foregroundStyle(color)
             if case .listening(let p) = state.voiceState, !p.isEmpty { Text(p).font(.caption).lineLimit(1).frame(maxWidth: 160) }
+            Text(state.settings.voice.recognitionLanguage == .korean ? "KO" : "EN").font(.caption2).foregroundStyle(.secondary)
         }
         .padding(6).background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { _ in if !pressed { pressed = true; app?.pushToTalk(down: true) } }
             .onEnded { _ in pressed = false; app?.pushToTalk(down: false) })
-        .help(state.t("Hold to talk (or hold ⌃⌥Space). Click while speaking to interrupt.", "누른 채 말하기 (또는 ⌃⌥Space 길게). 말하는 중 누르면 중단."))
+        .help(state.t("Hold to talk. Press while speaking to interrupt. Right-click to choose the language.", "누른 채 말하기. 말하는 중 누르면 중단. 우클릭으로 언어 선택."))
+        .contextMenu {
+            Button("한국어 (ko-KR)" + (state.settings.voice.recognitionLanguage == .korean ? " ✓" : "")) { app?.setVoiceLanguage(.korean) }
+            Button("English (en-US)" + (state.settings.voice.recognitionLanguage == .english ? " ✓" : "")) { app?.setVoiceLanguage(.english) }
+        }
         .accessibilityLabel("Push to talk")
     }
 }

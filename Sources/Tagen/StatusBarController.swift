@@ -11,21 +11,30 @@ final class StatusBarController: NSObject {
         self.controller = controller
         super.init()
         item.button?.image = NSImage(systemSymbolName: "sparkle.magnifyingglass", accessibilityDescription: "Tagen")
+        rebuildMenu()
+    }
+
+    /// Builds the menu with the user's current shortcut bindings.
+    func rebuildMenu() {
+        guard let c = controller else { return }
+        actions.removeAll()
+        let hk = c.state.settings.hotkeys
+        func hint(_ a: HotkeyAction) -> String? { hk[a]?.description }
+        let ko = c.state.lang == .korean
         let m = NSMenu()
-        add(m, "Open Assistant", "⌥Space") { $0.showPanel(focus: true) }
-        add(m, "Ask About Screen Region…", "⌥⇧R") { $0.askAboutRegion() }
-        add(m, "Explain Selection", "⌥⇧S") { $0.showPanel(focus: true); $0.runSelection(.explain) }
-        add(m, "Guide Me…", "⌥⇧G") { $0.state.mode = .guide; $0.showPanel(focus: true) }
+        add(m, ko ? "어시스턴트 열기" : "Open Assistant", hint(.toggleAssistant)) { $0.showPanel(focus: true) }
+        add(m, ko ? "화면 영역 질문…" : "Ask About Screen Region…", hint(.region)) { $0.askAboutRegion() }
+        add(m, ko ? "선택 텍스트 설명" : "Explain Selection", hint(.explainSelection)) { $0.showPanel(focus: true); $0.runSelection(.explain) }
+        add(m, ko ? "가이드…" : "Guide Me…", hint(.guide)) { $0.state.mode = .guide; $0.showPanel(focus: true) }
         m.addItem(.separator())
-        add(m, "Coding Agents…", nil) { $0.state.tab = .agents; $0.showPanel(focus: true) }
-        add(m, "History…", nil) { $0.state.tab = .history; $0.showPanel(focus: true) }
-        add(m, "Permissions…", nil) { $0.openSettings(tab: .permissions) }
-        add(m, "Settings…", nil) { $0.openSettings() }
+        add(m, ko ? "코딩 에이전트…" : "Coding Agents…", nil) { $0.state.tab = .agents; $0.showPanel(focus: true) }
+        add(m, ko ? "기록…" : "History…", nil) { $0.state.tab = .history; $0.showPanel(focus: true) }
+        add(m, ko ? "권한…" : "Permissions…", nil) { $0.openSettings(tab: .permissions) }
+        add(m, ko ? "설정…" : "Settings…", nil) { $0.openSettings() }
         m.addItem(.separator())
-        add(m, "⏹ Emergency Stop", "⌃⌥⌘.") { $0.emergencyStop() }
+        add(m, ko ? "⏹ 긴급 정지" : "⏹ Emergency Stop", hint(.emergencyStop)) { $0.emergencyStop() }
         m.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Tagen", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        m.addItem(quit)
+        m.addItem(NSMenuItem(title: ko ? "Tagen 종료" : "Quit Tagen", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = m
     }
 

@@ -32,6 +32,12 @@ struct SettingsView: View {
 
     func save() { app?.saveSettings(draft) }
 
+    static func comboText(_ k: KeyCombo) -> String {
+        let names: [KeyModifier: String] = [.control: "ctrl", .option: "opt", .shift: "shift", .command: "cmd"]
+        let order: [KeyModifier] = [.control, .option, .shift, .command]
+        return (order.filter { k.modifiers.contains($0) }.compactMap { names[$0] } + [k.key]).joined(separator: "+")
+    }
+
     var general: some View {
         Form {
             Picker(state.t("Interface language", "인터페이스 언어"), selection: $draft.uiLanguage) {
@@ -42,17 +48,29 @@ struct SettingsView: View {
                 Text("한국어").tag(ResponseLanguagePreference.korean); Text("English").tag(ResponseLanguagePreference.english)
             }
             Section(state.t("Shortcuts", "단축키")) {
-                Text("⌥Space — " + state.t("toggle assistant", "어시스턴트 열기/닫기"))
-                Text("⌃⌥Space (hold) — " + state.t("push-to-talk", "누른 채 말하기"))
-                Text("⌥⇧S — " + state.t("explain selection", "선택 텍스트 설명"))
-                Text("⌥⇧G — " + state.t("guide mode", "가이드 모드"))
-                Text("⌥⇧R — " + state.t("ask about a screen region", "화면 영역 질문"))
-                Text("⌃⌥⌘. — " + state.t("emergency stop", "긴급 정지"))
+                ForEach(HotkeyAction.allCases, id: \.self) { a in
+                    HStack {
+                        Text(a.title(state.lang))
+                        Spacer()
+                        TextField("opt+space", text: Binding(
+                            get: { draft.hotkeys[a].map(Self.comboText) ?? "" },
+                            set: { draft.hotkeys[a] = KeyCombo.parse($0) }))
+                            .textFieldStyle(.roundedBorder).frame(width: 140).labelsHidden()
+                        Text(draft.hotkeys[a]?.description ?? "—").font(.system(.body, design: .monospaced)).frame(width: 70, alignment: .trailing)
+                    }
+                }
+                let problems = HotkeyBindings.validate(draft.hotkeys)
+                if !problems.isEmpty {
+                    ForEach(problems, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
+                }
+                Button(state.t("Restore default shortcuts", "기본 단축키로 복원")) { draft.hotkeys = HotkeyBindings.defaults }
+                Text(state.t("Format: cmd/opt/ctrl/shift + key, e.g. opt+space, ctrl+opt+cmd+.", "형식: cmd/opt/ctrl/shift + 키, 예: opt+space, ctrl+opt+cmd+.")).font(.caption)
             }
             if let lat = state.panelLatenciesMs.sorted().dropFirst(state.panelLatenciesMs.count / 2).first {
                 Text(state.t("Panel open latency (median, this session): ", "패널 열림 지연 (중앙값, 이번 세션): ") + String(format: "%.1f ms", lat)).font(.caption)
             }
             Button(state.t("Save", "저장")) { draft.onboardingCompleted = true; save() }.buttonStyle(.borderedProminent)
+                .disabled(!HotkeyBindings.validate(draft.hotkeys).isEmpty)
         }
         .formStyle(.grouped)
     }

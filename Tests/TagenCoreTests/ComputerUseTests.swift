@@ -333,3 +333,32 @@ final class ComputerUseSessionTests: XCTestCase {
         if case .fail = ActionParser.parse(#"{"action":{"type":"keys","combo":"hyper+q"}}"#, observation: o) {} else { XCTFail() }
     }
 }
+
+final class HotkeyBindingTests: XCTestCase {
+    func testDefaultsValidAndCarbonMasks() {
+        XCTAssertEqual(HotkeyBindings.validate(HotkeyBindings.defaults), [])
+        XCTAssertEqual(HotkeyBindings.carbonModifiers(KeyCombo(key: "space", modifiers: [.option])), 0x800)
+        XCTAssertEqual(HotkeyBindings.carbonModifiers(KeyCombo(key: ".", modifiers: [.control, .option, .command])), 0x1900)
+        XCTAssertEqual(KeyCodes.code(for: "space"), 49)
+        XCTAssertEqual(KeyCodes.code(for: "."), 47)
+    }
+    func testValidationCatchesConflictsAndUnsafeBindings() {
+        var b = HotkeyBindings.defaults
+        b[.guide] = KeyCombo(key: "space", modifiers: [.option])
+        XCTAssertTrue(HotkeyBindings.validate(b).contains { $0.contains("same shortcut") })
+        b = HotkeyBindings.defaults; b[.region] = KeyCombo(key: "r")
+        XCTAssertTrue(HotkeyBindings.validate(b).contains { $0.contains("modifier") })
+        b = HotkeyBindings.defaults; b[.region] = KeyCombo(key: "f5")
+        XCTAssertEqual(HotkeyBindings.validate(b), [], "function keys may be used alone")
+        b = HotkeyBindings.defaults; b[.emergencyStop] = nil
+        XCTAssertTrue(HotkeyBindings.validate(b).contains { $0.contains("Emergency stop") })
+        b = HotkeyBindings.defaults; b[.region] = KeyCombo(key: "r", modifiers: [.shift])
+        XCTAssertFalse(HotkeyBindings.validate(b).isEmpty)
+        XCTAssertEqual(HotkeyBindings.canonical(KeyCombo(key: "s", modifiers: [.shift, .option])), HotkeyBindings.canonical(KeyCombo(key: "s", modifiers: [.option, .shift])))
+    }
+    func testBindingsCodableAsObject() throws {
+        let j = try JSONValue.from(HotkeyBindings.defaults)
+        XCTAssertNotNil(j["toggleAssistant"])
+        XCTAssertEqual(try j.decode([HotkeyAction: KeyCombo].self), HotkeyBindings.defaults)
+    }
+}

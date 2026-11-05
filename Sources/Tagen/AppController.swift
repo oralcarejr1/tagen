@@ -134,15 +134,29 @@ final class AppController {
 
     func registerHotkeys() {
         let hk = GlobalHotkeys.shared
-        hk.register(.optionSpace, name: "toggle assistant", onPress: { [weak self] in self?.togglePanel() })
-        hk.register(.controlOptionSpace, name: "push-to-talk",
-                    onPress: { [weak self] in self?.pushToTalk(down: true) },
-                    onRelease: { [weak self] in self?.pushToTalk(down: false) })
-        hk.register(.emergencyStop, name: "emergency stop", onPress: { [weak self] in self?.emergencyStop() })
-        hk.register(.selectionActions, name: "selection", onPress: { [weak self] in self?.state.mode = .ask; self?.showPanel(focus: true); self?.runSelection(.explain) })
-        hk.register(.guide, name: "guide", onPress: { [weak self] in self?.state.mode = .guide; self?.showPanel(focus: true) })
-        hk.register(.region, name: "region", onPress: { [weak self] in self?.askAboutRegion() })
-        if !hk.failures.isEmpty { state.errorMessage = "Some hotkeys could not be registered: " + hk.failures.joined(separator: ", ") }
+        hk.unregisterAll()
+        hk.failures.removeAll()
+        let b = state.settings.hotkeys
+        func reg(_ a: HotkeyAction, press: @escaping () -> Void, release: (() -> Void)? = nil) {
+            guard let combo = b[a], let key = GlobalHotkeys.Hotkey(combo) else { return }
+            hk.register(key, name: a.rawValue, onPress: press, onRelease: release)
+        }
+        reg(.toggleAssistant, press: { [weak self] in self?.togglePanel() })
+        reg(.pushToTalk, press: { [weak self] in self?.pushToTalk(down: true) }, release: { [weak self] in self?.pushToTalk(down: false) })
+        reg(.emergencyStop, press: { [weak self] in self?.emergencyStop() })
+        reg(.explainSelection, press: { [weak self] in self?.state.mode = .ask; self?.showPanel(focus: true); self?.runSelection(.explain) })
+        reg(.guide, press: { [weak self] in self?.state.mode = .guide; self?.showPanel(focus: true) })
+        reg(.region, press: { [weak self] in self?.askAboutRegion() })
+        if !hk.failures.isEmpty {
+            state.errorMessage = state.t("Some shortcuts could not be registered (in use by another app): ", "일부 단축키를 등록하지 못했습니다 (다른 앱이 사용 중): ")
+                + hk.failures.joined(separator: ", ")
+        }
+    }
+
+    func setVoiceLanguage(_ lang: LanguageCode) {
+        var s = state.settings
+        s.voice.recognitionLanguage = lang
+        saveSettings(s)
     }
 
     // MARK: panel
@@ -431,6 +445,8 @@ final class AppController {
         Task { await v.updateSettings(s.voice) }
         rebuildAgentManager()
         refreshAgentAuth()
+        registerHotkeys()
+        statusBar?.rebuildMenu()
     }
 
     func setSecret(_ key: String, _ value: String) {

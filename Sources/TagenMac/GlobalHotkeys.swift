@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import Carbon.HIToolbox
+import TagenCore
 
 /// System-wide hotkeys via Carbon RegisterEventHotKey (does not require Accessibility).
 /// Supports press and release callbacks (for push-to-talk).
@@ -10,6 +11,12 @@ public final class GlobalHotkeys {
         public var keyCode: UInt32
         public var modifiers: UInt32   // Carbon modifier flags (cmdKey, optionKey, ...)
         public init(keyCode: UInt32, modifiers: UInt32) { self.keyCode = keyCode; self.modifiers = modifiers }
+
+        /// From a configurable binding (virtual key codes are layout-independent positions, US names).
+        public init?(_ combo: KeyCombo) {
+            guard let code = KeyCodes.code(for: combo.key) else { return nil }
+            self.init(keyCode: UInt32(code), modifiers: HotkeyBindings.carbonModifiers(combo))
+        }
 
         public static let optionSpace = Hotkey(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
         public static let controlOptionSpace = Hotkey(keyCode: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey))
@@ -25,7 +32,7 @@ public final class GlobalHotkeys {
     fileprivate var releaseHandlers: [UInt32: () -> Void] = [:]
     private var nextID: UInt32 = 1
     private var installed = false
-    public private(set) var failures: [String] = []
+    public var failures: [String] = []
 
     @discardableResult
     public func register(_ hk: Hotkey, name: String, onPress: @escaping () -> Void, onRelease: (() -> Void)? = nil) -> Bool {

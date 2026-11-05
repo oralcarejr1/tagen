@@ -21,6 +21,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var uiLanguage: LanguageCode = .korean
     public var onboardingCompleted = false
     public var keepHistory = true
+    public var hotkeys: [HotkeyAction: KeyCombo] = HotkeyBindings.defaults
 
     public init() {}
 
@@ -42,6 +43,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         codexMode = d(.codexMode, codexMode); cliPathOverrides = d(.cliPathOverrides, cliPathOverrides)
         uiLanguage = d(.uiLanguage, uiLanguage); onboardingCompleted = d(.onboardingCompleted, onboardingCompleted)
         keepHistory = d(.keepHistory, keepHistory)
+        hotkeys = d(.hotkeys, hotkeys)
+        if !HotkeyBindings.validate(hotkeys).isEmpty { hotkeys = HotkeyBindings.defaults }
     }
 
     public func isAllowedProjectFolder(_ path: String) -> Bool {
