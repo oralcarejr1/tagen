@@ -28,6 +28,17 @@
 - Replacement of selected text works only where the focused element accepts `kAXSelectedTextAttribute` writes.
 - Element-anchored annotations update on AX notifications (moved/resized/destroyed, measured 68–102 ms to first
   notification on CI) with a 0.5 s poll as fallback for apps that do not post them; very fast animations may lag. Screenshot-box annotations are dropped when their window resizes (coordinates stale).
+- Claude subscription provider (`claude` CLI): each request starts a CLI process, so replies begin about 6–7 s
+  after sending on an M5 Pro (measured with Sonnet) instead of about 1–2 s with the API; requests count toward the
+  subscription's usage limits (a limit message maps to "rate limited"); no prompt caching across turns (each turn
+  resends the flattened conversation); `maxTokens` is not passed (the CLI has no flag for it). Depends on CLI flags
+  checked against Claude Code 2.1.318.
+- ChatGPT subscription provider (`codex` CLI): no text streaming (the answer appears when the turn ends); 7–20 s per
+  request measured; each request carries about 14k input tokens of Codex's own agent instructions (counts toward the
+  subscription limits); a few inert agent tools stay visible because Codex cannot run as a bare model; `--ignore-user-config`
+  means the model in `~/.codex/config.toml` is not used unless entered in Settings › Models. In one probe
+  `gpt-6.1-sol` misread a tiny 64×32 test image that the default model read correctly; on a real UI screenshot the
+  default model was correct. Depends on CLI flags checked against codex-cli 0.166.0.
 - Guide/Act quality depends on the model; all model output is validated, but the planner can still choose wrong
   (valid) actions — risky ones always require approval.
 - Live CI showed CGEvent Unicode keystrokes posted to the HID event tap did not reach the fixture app; Tagen therefore

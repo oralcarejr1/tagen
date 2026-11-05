@@ -3,6 +3,10 @@ import Foundation
 public enum ProviderKind: String, Sendable, Codable, CaseIterable {
     case anthropic
     case openAICompatible
+    /// The user's Claude subscription via the Claude Code CLI (no API key; see ClaudeCLIModelClient).
+    case claudeCLI
+    /// The user's ChatGPT subscription via the Codex CLI (no API key; see CodexCLIModelClient).
+    case codexCLI
 }
 
 /// User-editable model configuration (persisted in settings; keys live in the SecretStore).
@@ -36,6 +40,23 @@ public struct ModelSettings: Sendable, Codable, Equatable {
         .guidance: Route(provider: .anthropic, model: AnthropicClient.defaultModel, effort: .medium),
         .computerUse: Route(provider: .anthropic, model: AnthropicClient.defaultModel, effort: .medium),
     ])
+
+    /// Routes for a Claude subscription through the Claude Code CLI (model names are CLI aliases):
+    /// Sonnet for latency-sensitive Ask/selection, Opus for Guide and Act planning.
+    public static let claudeSubscriptionRoutes: [ModelPurpose: Route] = [
+        .quickAnswer: Route(provider: .claudeCLI, model: "sonnet", effort: .low),
+        .screenQuestion: Route(provider: .claudeCLI, model: "sonnet", effort: .low),
+        .guidance: Route(provider: .claudeCLI, model: "opus", effort: .medium),
+        .computerUse: Route(provider: .claudeCLI, model: "opus", effort: .medium),
+    ]
+
+    /// Routes for a ChatGPT subscription through the Codex CLI. An empty model uses the CLI's default.
+    public static let chatGPTSubscriptionRoutes: [ModelPurpose: Route] = [
+        .quickAnswer: Route(provider: .codexCLI, model: "", effort: .low),
+        .screenQuestion: Route(provider: .codexCLI, model: "", effort: .low),
+        .guidance: Route(provider: .codexCLI, model: "", effort: .medium),
+        .computerUse: Route(provider: .codexCLI, model: "", effort: .medium),
+    ]
 }
 
 /// Resolves which client/model serves a request and falls back on retryable failures.

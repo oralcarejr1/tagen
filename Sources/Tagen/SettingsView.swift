@@ -91,10 +91,22 @@ struct SettingsView: View {
                         Text(p.displayName(state.lang)).frame(width: 170, alignment: .leading)
                         Picker("", selection: routeBinding(p).provider) {
                             Text("Anthropic").tag(ProviderKind.anthropic); Text(state.t("OpenAI-compatible", "OpenAI 호환")).tag(ProviderKind.openAICompatible)
+                            Text(state.t("Claude subscription", "Claude 구독")).tag(ProviderKind.claudeCLI)
+                            Text(state.t("ChatGPT subscription", "ChatGPT 구독")).tag(ProviderKind.codexCLI)
                         }.labelsHidden().frame(width: 150)
                         TextField("model", text: routeBinding(p).model).textFieldStyle(.roundedBorder).labelsHidden()
                     }
                 }
+                HStack {
+                    Button(state.t("Use my Claude subscription for all tasks", "모든 작업에 내 Claude 구독 사용")) {
+                        draft.models.routes = ModelSettings.claudeSubscriptionRoutes
+                    }
+                    Button(state.t("Use my ChatGPT subscription for all tasks", "모든 작업에 내 ChatGPT 구독 사용")) {
+                        draft.models.routes = ModelSettings.chatGPTSubscriptionRoutes
+                    }
+                }
+                Text(state.t("Subscriptions run through the Claude Code / Codex CLI signed in on this Mac (Settings › Agents): no API key or API credits, but replies start several seconds later (ChatGPT: about 10–20 s, no streaming) and count toward your subscription's usage limits. An empty model name uses the CLI's default.",
+                             "구독은 이 Mac에 로그인된 Claude Code / Codex CLI(설정 › 에이전트)로 실행합니다. API 키나 API 크레딧이 필요 없지만 응답이 몇 초 늦게 시작되고(ChatGPT는 약 10–20초, 스트리밍 없음) 구독 사용 한도에 포함됩니다. 모델 이름을 비우면 CLI 기본 모델을 씁니다.")).font(.caption)
             }
             Section(state.t("OpenAI-compatible / local endpoint", "OpenAI 호환 / 로컬 엔드포인트")) {
                 TextField("Base URL", text: $draft.models.openAIBaseURL)

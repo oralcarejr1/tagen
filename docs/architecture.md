@@ -89,6 +89,23 @@ overlays; Keychain for credentials; redaction everywhere text is persisted or lo
 - **CI artifacts** — `Tagen --render-ui <dir>` renders panel/settings screens; `tagen-live-probe` measures real apps;
   both are published to the `ci-artifacts` branch.
 
+- **Claude subscription provider** — `ClaudeCLIModelClient` (TagenAgents, `ProviderKind.claudeCLI`) serves any route
+  through `claude -p --input-format stream-json --output-format stream-json` with `--tools ""`, `--setting-sources ""`,
+  `--strict-mcp-config`, `--disable-slash-commands`, `--no-session-persistence`, `--max-turns 1`, run in an empty
+  `~/Library/Caches/Tagen/model-cwd`. Images are sent as base64 content blocks; multi-turn history is flattened into one
+  user message (the CLI cannot replay assistant turns). `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` are removed from the
+  child environment so billing follows the CLI sign-in (subscription or a stored `claude setup-token` token). `--bare`
+  is deliberately not used: it only accepts API-key auth. Settings › Models › "Use my Claude subscription for all
+  tasks" applies `ModelSettings.claudeSubscriptionRoutes` (Sonnet for Ask/selection, Opus for Guide/Act).
+- **ChatGPT subscription provider** — `CodexCLIModelClient` (`ProviderKind.codexCLI`) uses `codex exec --json
+  --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox read-only` with the shell tool, code
+  mode, apps, plugins, hooks, browser and computer use disabled, `web_search="disabled"`, `project_doc_max_bytes=0`
+  (no AGENTS.md) and the system prompt as `developer_instructions` (TOML-escaped). Codex is always an agent, so a few
+  inert tools (wait, user input) remain visible to the model; nothing that runs commands or writes files is enabled.
+  Images are written to a private temp folder outside the working directory, passed with `--image` and deleted when the
+  turn ends. Only the last `agent_message` of the turn is returned (earlier ones are narration); `codex exec` does not
+  stream text. `OPENAI_API_KEY`/`CODEX_API_KEY` are removed so billing follows the ChatGPT sign-in.
+
 ## Verification levels
 1. Unit + integration tests on Linux (Docker, Swift 6.2) — TagenCore, TagenAgents (fake CLIs, real relay binary).
 2. macOS CI compile + the same tests + TagenMacTests (OCR, Keychain, display layout, overlay) on `macos-26`.

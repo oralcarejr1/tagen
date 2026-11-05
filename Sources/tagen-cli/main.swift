@@ -8,7 +8,8 @@ import TagenAgents
 //                       [--resume SESSION] [--model M] [--approve all|none|ask] [--json] [--exe PATH] [--mcp PATH] PROMPT
 //   tagen-cli agent status --provider claude|codex
 //   tagen-cli policy command "<shell command>"
-//   tagen-cli ask [--model M] "question"          (uses ANTHROPIC_API_KEY)
+//   tagen-cli ask [--provider anthropic|claude-cli|codex-cli] [--model M] [--image PNG] "question"
+//                 (anthropic uses ANTHROPIC_API_KEY; claude-cli / codex-cli use the CLI's subscription sign-in)
 
 struct CLIError: Error, CustomStringConvertible { let description: String }
 
@@ -119,12 +120,34 @@ func agentStatus(_ args: [String]) async -> Int32 {
 func ask(_ args: [String]) async throws -> Int32 {
     let (o, _, pos) = parseOptions(args)
     guard let q = pos.first else { throw CLIError(description: "missing question") }
-    let key = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
-    let client = AnthropicClient(apiKey: key)
-    let req = ChatRequest(system: PromptLibrary.systemPrompt, messages: [.user(PromptLibrary.askInstruction(question: q))], maxTokens: 4000,
+    let client: ModelClient
+    let defaultModel: String
+    if o["--provider"] == "claude-cli" {
+        var locator = ExecutableLocator()
+        if let exe = o["--exe"] { locator.overrides["claude"] = exe }
+        let auth = AgentAuthManager(locator: locator, secrets: InMemorySecretStore(), loginShellPATH: ExecutableLocator.loginShellPATH())
+        client = ClaudeCLIModelClient(executable: auth.executable(.claudeCode), environment: auth.environment(for: .claudeCode))
+        defaultModel = "sonnet"
+    } else if o["--provider"] == "codex-cli" {
+        var locator = ExecutableLocator()
+        if let exe = o["--exe"] { locator.overrides["codex"] = exe }
+        let auth = AgentAuthManager(locator: locator, secrets: InMemorySecretStore(), loginShellPATH: ExecutableLocator.loginShellPATH())
+        client = CodexCLIModelClient(executable: auth.executable(.codex), environment: auth.environment(for: .codex))
+        defaultModel = ""
+    } else {
+        client = AnthropicClient(apiKey: ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? "")
+        defaultModel = AnthropicClient.defaultModel
+    }
+    var parts: [ContentPart] = []
+    if let img = o["--image"] {
+        guard let d = FileManager.default.contents(atPath: img) else { throw CLIError(description: "cannot read \(img)") }
+        parts.append(.image(data: d, mediaType: "image/png"))
+    }
+    parts.append(.text(PromptLibrary.askInstruction(question: q)))
+    let req = ChatRequest(system: PromptLibrary.systemPrompt, messages: [ChatMessage(role: .user, parts: parts)], maxTokens: 4000,
                           purpose: .quickAnswer, effort: .low)
     do {
-        let r = try await client.complete(req, model: o["--model"] ?? AnthropicClient.defaultModel) { FileHandle.standardOutput.write(Data($0.utf8)) }
+        let r = try await client.complete(req, model: o["--model"] ?? defaultModel) { FileHandle.standardOutput.write(Data($0.utf8)) }
         print("\n[\(r.model), in=\(r.usage.inputTokens) out=\(r.usage.outputTokens)]")
         return 0
     } catch let e as ModelError {

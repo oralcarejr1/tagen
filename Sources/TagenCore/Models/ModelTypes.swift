@@ -130,6 +130,22 @@ public enum ModelError: Error, Sendable, Equatable, CustomStringConvertible {
     /// Localized, user-facing explanation.
     public func userMessage(_ lang: LanguageCode) -> String {
         switch (self, lang) {
+        case (.notConfigured(let m), .korean) where m.hasPrefix("Claude Code"):
+            return "Claude Code CLI를 찾을 수 없습니다. Claude Code를 설치하거나 설정 > 에이전트에서 경로를 지정하세요."
+        case (.notConfigured(let m), _) where m.hasPrefix("Claude Code"):
+            return "Claude Code CLI was not found. Install Claude Code or set its path in Settings › Agents."
+        case (.authentication(let m), .korean) where m.hasPrefix("Claude Code"):
+            return "Claude Code에 로그인되어 있지 않습니다. 설정 > 에이전트에서 Claude Code 로그인을 하세요."
+        case (.authentication(let m), _) where m.hasPrefix("Claude Code"):
+            return "Claude Code is not signed in. Use Sign in… for Claude Code in Settings › Agents."
+        case (.notConfigured(let m), .korean) where m.hasPrefix("Codex"):
+            return "Codex CLI를 찾을 수 없습니다. Codex를 설치하거나 설정 > 에이전트에서 경로를 지정하세요."
+        case (.notConfigured(let m), _) where m.hasPrefix("Codex"):
+            return "Codex CLI was not found. Install Codex or set its path in Settings › Agents."
+        case (.authentication(let m), .korean) where m.hasPrefix("Codex"):
+            return "Codex에 로그인되어 있지 않습니다. 설정 > 에이전트에서 Codex 로그인을 하세요."
+        case (.authentication(let m), _) where m.hasPrefix("Codex"):
+            return "Codex is not signed in. Use Sign in… for Codex in Settings › Agents."
         case (.notConfigured, .korean): return "모델 API 키가 설정되지 않았습니다. 설정 > 모델에서 키를 입력하세요."
         case (.authentication, .korean): return "API 인증에 실패했습니다. 설정에서 API 키를 확인하세요."
         case (.rateLimited, .korean), (.overloaded, .korean): return "모델 서비스가 혼잡합니다. 잠시 후 다시 시도하세요."

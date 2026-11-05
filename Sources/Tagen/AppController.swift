@@ -78,8 +78,14 @@ final class AppController {
             .appendingPathComponent("Tagen", isDirectory: true).appendingPathComponent("tagen.sqlite")
     }
 
-    static func makeRouter(settings: AppSettings, secrets: SecretStore) -> ModelRouter {
+    static func makeRouter(settings: AppSettings, secrets: SecretStore, loginShellPATH: String? = nil) -> ModelRouter {
         var clients: [ProviderKind: ModelClient] = [:]
+        let auth = AgentAuthManager(locator: ExecutableLocator(overrides: settings.cliPathOverrides), secrets: secrets, loginShellPATH: loginShellPATH)
+        let modelCwd = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("Tagen/model-cwd").path
+        clients[.claudeCLI] = ClaudeCLIModelClient(executable: auth.executable(.claudeCode), environment: auth.environment(for: .claudeCode),
+                                                   workingDirectory: modelCwd)
+        clients[.codexCLI] = CodexCLIModelClient(executable: auth.executable(.codex), environment: auth.environment(for: .codex),
+                                                 workingDirectory: modelCwd.map { $0 + "-codex" })
         let anthropicKey = ((try? secrets.get(SecretKey.anthropicAPIKey)) ?? nil) ?? ""
         clients[.anthropic] = AnthropicClient(apiKey: anthropicKey, enableRefusalFallback: settings.models.enableRefusalFallback)
         if let url = URL(string: settings.models.openAIBaseURL) {
@@ -442,7 +448,7 @@ final class AppController {
         state.settings = s
         settingsBox.set(s)
         try? store?.setSetting("appSettings", s)
-        router = AppController.makeRouter(settings: s, secrets: secrets)
+        router = AppController.makeRouter(settings: s, secrets: secrets, loginShellPATH: loginShellPATH)
         orchestrator = AssistantOrchestrator(contextProvider: contextProvider, models: router, store: s.keepHistory ? store : nil, settings: s.assistant)
         let v = voice!
         Task { await v.updateSettings(s.voice) }

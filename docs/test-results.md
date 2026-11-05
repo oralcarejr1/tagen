@@ -68,7 +68,23 @@ the focused field — fixed in 0c48908 with unit tests; the step also hung becau
 posted to the HID tap never reached the app, so text insertion now uses `kAXSelectedTextAttribute` first (AX before
 keyboard events) with a pid-targeted keystroke fallback (98965ac) → 27/27. The pid-targeted keystroke fallback itself
 was not exercised by this run (AX insertion succeeded). Not covered here: multiple displays, Retina scaling, full-screen apps (single 1× display on the runner).
-## Physical-Mac verification checklist (not yet performed)
+## L5 — Physical Mac (MacBook Pro, macOS 27.0.1, built-in Liquid Retina XDR 1728×1117 pt @2×), commit c4a456c, 2026-11-05
+Built locally with Xcode 27.2 (`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; Command Line Tools alone lack
+XCTest and the SwiftUI macro plugins, so `swift test` and the app target fail without full Xcode).
+
+| Check | Result |
+|---|---|
+| `swift build --build-tests && swift test` | ✔ 152 tests (TagenCore 120, TagenAgents 32), 0 failures |
+| `scripts/macos/package-app.sh` | ✔ `dist/Tagen.app`, `Tagen.zip`, `TagenFixture.app`, `tagen-gui-check`, `tagen-live-probe` |
+| `Tagen --self-test` | ✔ all checks pass; panel open latency median 1.2 ms, first 89.2 ms (n=21); overlay render 25 ms; both CLIs found |
+| P2 `scripts/macos/live-gui-check.sh` | ✔ safe 27/27, safety 5/5, 0 unauthorized, anchoring max **1.0 pt** at @2×, selection 5/5 (Accessibility inherited from the launching process; Screen Recording not granted) |
+| Claude subscription provider (after adding `ClaudeCLIModelClient`) | ✔ 12 unit tests with `fake_claude_model.py` (args, image blocks, API-key stripping, flattening, auth/limit/crash/timeout/cancel, router); TagenAgents now 44 tests. Real CLI (Claude Code 2.1.318, subscription sign-in): Korean text answer via `tagen-cli ask --provider claude-cli` in 7.0 s; 64×32 two-colour PNG described correctly; no session files written to `~/.claude/projects` |
+| ChatGPT subscription provider (`CodexCLIModelClient`) | ✔ 10 unit tests with `fake_codex_model.py` (locked-down args, TOML escaping, last-message selection, image files outside cwd and deleted, flattening, auth/limit/crash/timeout/cancel, router); TagenAgents now 54 tests (174 total with TagenCore). Real CLI (codex-cli 0.166.0, ChatGPT sign-in, default model) on a CI screenshot of Tagen's Korean approval card: correct action and button names in 7.1 s; Claude subscription on the same image: correct in 6.0 s; no session files in `~/.codex/sessions`; no leftover image files |
+| L4b live probe | not run: it terminates the apps it opened, which would close the user's running Safari |
+
+Not yet covered on the physical Mac: P1, P3–P18 (need user interaction, microphone; P9 needs a second display). Claude Code and Codex are both signed in on this Mac (subscription), and Ask/Guide/Act can run without an API key via the Claude or ChatGPT subscription providers. Linux container tests were not re-run after adding the provider.
+
+## Physical-Mac verification checklist (P2 done in L5; rest pending)
 
 Prerequisites: macOS 14+ (tested build target), `Tagen.app` from CI artifact, Anthropic API key, optional second display.
 

@@ -4,7 +4,8 @@
    Codex/Claude Code bridge, safe computer use). See `CLAUDE.md`, `docs/architecture.md`.
 2. **Current phase** — Phase 6 (integration, packaging, verification, docs). All phases implemented.
 3. **Completed** — all modules, app UI, fixture + live checker, CI (Linux + macOS 26), packaging, docs.
-4. **Pending** — physical-Mac checklist (P1–P18 in test-results); real Codex/Claude Code runs with login on the Mac;
+4. **Pending** — physical-Mac checklist (P1, P3–P18 in test-results; P2 passed on the Mac, see L5) using the new Claude
+   or ChatGPT subscription provider (no API key); real Codex/Claude Code agent runs with login on the Mac;
    Developer ID signing + notarization (needs the user's certificate).
 5. **Exact next action** — run the physical-Mac checklist. CI is green and publishes reports + UI screenshots to the
    `ci-artifacts` branch (`runs/<n>-<sha>/`); after each change review `ui/*.png` and `live-probe.log` there.

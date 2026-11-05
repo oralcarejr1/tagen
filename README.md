@@ -13,6 +13,7 @@ selected text, points at UI elements with on-screen overlays, talks with push-to
 | Selection actions | Explain / Summarize / Translate (ko↔en) / Rewrite / Custom on AX-selected text or a drawn region; approved in-place replacement. No clipboard monitoring. |
 | Visual guidance | Arrows, circles, highlights and labels in click-through overlays on every display; anchored to AX elements and removed when targets change. |
 | Voice | Push-to-talk (hold ⌃⌥Space or the mic button), partial transcripts, ko-KR/en-US, on-device when available, spoken answers, interrupt/cancel, text fallback. |
+| Models | Anthropic API, OpenAI-compatible/local endpoints, or a Claude / ChatGPT subscription via the Claude Code / Codex CLI (no API key). |
 | Coding agents | Claude Code (`claude -p --output-format stream-json`, approvals via bundled MCP relay) and Codex (`codex app-server`, or `codex exec --json`); progress, tool activity, approvals, cancel, resume, crash recovery. |
 | Computer use | Typed actions (click, type, menu, keys, scroll, wait, focus) with Observe → Identify → Validate → Authorize → Execute → Re-observe → Verify. |
 | Safety | Per-capability permissions, risk policy, approvals, global emergency stop (⌃⌥⌘.), Keychain secrets, redaction, no stored screenshots/audio. |
@@ -24,7 +25,9 @@ selected text, points at UI elements with on-screen overlays, talks with push-to
    xattr -dr com.apple.quarantine /Applications/Tagen.app
    ```
 3. Open Tagen (menu-bar sparkle icon). Settings › Permissions walks through each permission.
-4. Settings › Models: paste an Anthropic API key (stored in the Keychain). Optional: OpenAI-compatible/local endpoint.
+4. Settings › Models: paste an Anthropic API key (stored in the Keychain), **or** press "Use my Claude subscription for all
+   tasks" / "Use my ChatGPT subscription for all tasks" to run through the Claude Code / Codex CLI signed in on this
+   Mac (no API key or credits). Optional: OpenAI-compatible/local endpoint.
 5. Settings › Agents: enable agent execution, sign in to each CLI on this Mac (opens Terminal) or paste a token.
 
 ## Build from source (macOS 14+, Xcode 26 / Swift 6.2)
