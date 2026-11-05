@@ -39,6 +39,12 @@
   means the model in `~/.codex/config.toml` is not used unless entered in Settings › Models. In one probe
   `gpt-6.1-sol` misread a tiny 64×32 test image that the default model read correctly; on a real UI screenshot the
   default model was correct. Depends on CLI flags checked against codex-cli 0.166.0.
+- Signing: with `scripts/macos/setup-dev-signing.sh` builds use a self-signed local certificate (stable designated
+  requirement, so permissions survive rebuilds). It is not trusted by Gatekeeper and is not a Developer ID; builds from
+  CI stay ad-hoc. Permissions granted to earlier ad-hoc builds do not carry over: grant them once more for the first
+  certificate-signed build (remove stale "Tagen" rows in System Settings if a switch shows on but has no effect).
+- Synthetic keystrokes (CGEvent) do not trigger macOS input-source shortcuts, so the ⌃⌥Space fix was verified by the
+  self-test (no default conflicts with the Mac's enabled shortcuts) and needs a physical key press to confirm.
 - Guide/Act quality depends on the model; all model output is validated, but the planner can still choose wrong
   (valid) actions — risky ones always require approval.
 - Live CI showed CGEvent Unicode keystrokes posted to the HID event tap did not reach the fixture app; Tagen therefore

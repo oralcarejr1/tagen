@@ -14,8 +14,8 @@ import TagenCore
 /// Billing follows the CLI's ChatGPT sign-in: API-key variables are removed from the child environment.
 public struct CodexCLIModelClient: ModelClient {
     public static let providerDisplayName = "ChatGPT subscription (Codex)"
+    public static let toolName = "Codex"
     public static let strippedEnvironmentKeys = ["OPENAI_API_KEY", "CODEX_API_KEY"]
-    public static let notInstalledMessage = "Codex CLI not found"
     /// Features turned off so the agent cannot run commands or reach other services.
     public static let disabledFeatures = ["shell_tool", "code_mode_host", "apps", "plugins", "hooks", "browser_use", "computer_use"]
 
@@ -86,23 +86,15 @@ public struct CodexCLIModelClient: ModelClient {
         switch mediaType { case "image/jpeg": return "jpg"; case "image/gif": return "gif"; case "image/webp": return "webp"; default: return "png" }
     }
 
-    static func classify(_ text: String) -> ModelError {
-        let msg = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if AuthErrorDetector.isAuthError(msg) { return .authentication("Codex is not signed in: \(msg)") }
-        if ClaudeCLIModelClient.isLimitError(msg) { return .rateLimited(retryAfter: nil) }
-        return .server(status: 0, message: msg.isEmpty ? "codex reported an error" : String(msg.prefix(500)))
-    }
-
     public func stream(_ request: ChatRequest, model: String) -> AsyncThrowingStream<ModelStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
-            guard let exe = executable else {
-                continuation.finish(throwing: ModelError.notConfigured(Self.notInstalledMessage)); return
-            }
+        let cwd = workingDirectory, env = environment
+        let (text, images) = Self.prompt(request.messages)
+        // Images go to a private folder outside the working directory, deleted when the request ends.
+        let imageDir = (NSTemporaryDirectory() as NSString).appendingPathComponent("tagen-codex-img-\(UUID().uuidString.prefix(8))")
+        return CLIModelRun.stream(tool: Self.toolName, executable: executable, timeout: request.timeout,
+                                  parser: CodexModelOutputParser(requestedModel: model), makeLaunch: { exe in
             let fm = FileManager.default
-            try? fm.createDirectory(atPath: workingDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            let (text, images) = Self.prompt(request.messages)
-            // Images go to a private folder outside the working directory and are deleted afterwards.
-            let imageDir = (NSTemporaryDirectory() as NSString).appendingPathComponent("tagen-codex-img-\(UUID().uuidString.prefix(8))")
+            try? fm.createDirectory(atPath: cwd, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             var paths: [String] = []
             if !images.isEmpty {
                 try? fm.createDirectory(atPath: imageDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -111,75 +103,36 @@ public struct CodexCLIModelClient: ModelClient {
                     if fm.createFile(atPath: p, contents: img.data, attributes: [.posixPermissions: 0o600]) { paths.append(p) }
                 }
             }
-            let cleanup: @Sendable () -> Void = { try? FileManager.default.removeItem(atPath: imageDir) }
-            let proc = JSONLProcess()
-            let launch = ProcessLaunch(executable: exe, arguments: Self.arguments(request, model: model, workingDirectory: workingDirectory, imagePaths: paths),
-                                       environment: environment, workingDirectory: workingDirectory, stdinText: text)
-            do { try proc.launch(launch) } catch {
-                cleanup()
-                continuation.finish(throwing: ModelError.notConfigured("\(Self.notInstalledMessage): \(error)")); return
-            }
-            let timedOut = Locked(false)
-            let timer = Task {
-                try? await Task.sleep(nanoseconds: UInt64(max(1, request.timeout) * 1_000_000_000))
-                if !Task.isCancelled { timedOut.set(true); proc.terminate() }
-            }
-            let reader = Task {
-                var lastMessage = "", lastError: String?, finished = false
-                for await out in proc.output {
-                    switch out {
-                    case .stdout(let line):
-                        guard !finished, let j = try? JSONValue.parse(line) else { continue }
-                        switch j["type"]?.stringValue {
-                        case "item.completed":
-                            if j.at("item", "type")?.stringValue == "agent_message", let t = j.at("item", "text")?.stringValue {
-                                lastMessage = t
-                            }
-                        case "error":
-                            lastError = j["message"]?.stringValue
-                        case "turn.failed":
-                            finished = true; cleanup()
-                            continuation.finish(throwing: Self.classify(j.at("error", "message")?.stringValue ?? lastError ?? "turn failed"))
-                        case "turn.completed":
-                            // Images are no longer needed; delete them before the caller sees the answer
-                            // (a short-lived caller may exit right after).
-                            finished = true; cleanup()
-                            let u = j["usage"]
-                            let usage = TokenUsage(inputTokens: u?["input_tokens"]?.intValue ?? 0, outputTokens: u?["output_tokens"]?.intValue ?? 0,
-                                                   cacheReadTokens: u?["cached_input_tokens"]?.intValue ?? 0)
-                            if lastMessage.isEmpty {
-                                continuation.finish(throwing: ModelError.decoding("Codex finished without an answer"))
-                            } else {
-                                continuation.yield(.textDelta(lastMessage))
-                                continuation.yield(.completed(ChatResponse(text: lastMessage, stopReason: "end_turn",
-                                                                           model: model.isEmpty ? "codex default" : model, usage: usage)))
-                                continuation.finish()
-                            }
-                        default: break
-                        }
-                    case .stderr:
-                        break
-                    case .exited(let code):
-                        timer.cancel()
-                        guard !finished else { break }
-                        if timedOut.current { continuation.finish(throwing: ModelError.timeout); break }
-                        if Task.isCancelled { continuation.finish(throwing: ModelError.cancelled); break }
-                        let stderr = proc.recentStderr.suffix(5).joined(separator: "\n")
-                        let detail = ([lastError].compactMap { $0 } + [stderr]).joined(separator: "\n")
-                        let err = Self.classify(detail)
-                        if case .server = err {
-                            continuation.finish(throwing: ModelError.server(status: 0, message: "codex exited with code \(code)" + (detail.isEmpty ? "" : ": \(detail.prefix(400))")))
-                        } else {
-                            continuation.finish(throwing: err)
-                        }
-                    }
-                }
-                timer.cancel()
-                cleanup()
-            }
-            continuation.onTermination = { _ in
-                timer.cancel(); reader.cancel(); proc.terminate(grace: 1); cleanup()
-            }
+            return ProcessLaunch(executable: exe, arguments: Self.arguments(request, model: model, workingDirectory: cwd, imagePaths: paths),
+                                 environment: env, workingDirectory: cwd, stdinText: text)
+        }, onEnd: { try? FileManager.default.removeItem(atPath: imageDir) })
+    }
+}
+
+/// `codex exec --json` events → the turn's last agent message (earlier ones are narration).
+/// Codex exec does not stream text, so the answer is delivered in one piece.
+final class CodexModelOutputParser: CLIModelOutputParser {
+    private var lastMessage = ""
+    private let requestedModel: String
+
+    init(requestedModel: String) { self.requestedModel = requestedModel }
+
+    func handle(_ j: JSONValue, _ out: CLIModelOutput) {
+        switch j["type"]?.stringValue {
+        case "item.completed":
+            if j.at("item", "type")?.stringValue == "agent_message", let t = j.at("item", "text")?.stringValue { lastMessage = t }
+        case "error":
+            if let m = j["message"]?.stringValue { out.note(m) }
+        case "turn.failed":
+            out.fail(reported: j.at("error", "message")?.stringValue ?? out.notedErrors.last ?? "turn failed")
+        case "turn.completed":
+            guard !lastMessage.isEmpty else { out.fail(.decoding("Codex finished without an answer")); return }
+            let u = j["usage"]
+            out.delta(lastMessage)
+            out.complete(ChatResponse(text: lastMessage, stopReason: "end_turn", model: requestedModel.isEmpty ? "codex default" : requestedModel,
+                                      usage: TokenUsage(inputTokens: u?["input_tokens"]?.intValue ?? 0, outputTokens: u?["output_tokens"]?.intValue ?? 0,
+                                                        cacheReadTokens: u?["cached_input_tokens"]?.intValue ?? 0)))
+        default: break
         }
     }
 }

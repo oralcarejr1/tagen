@@ -100,7 +100,7 @@ public struct ModelRouter: Sendable {
                         continuation.finish(); return
                     } catch let e as ModelError {
                         lastError = e
-                        let canFallback = !emitted && (e.isRetryable || { if case .notConfigured = e { return true }; return false }())
+                        let canFallback = !emitted && (e.isRetryable || e.isMissingProvider)
                         if !canFallback { break }
                     } catch {
                         lastError = error

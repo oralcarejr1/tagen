@@ -402,6 +402,62 @@ final class ComputerUseSessionTests: XCTestCase {
 }
 
 final class HotkeyBindingTests: XCTestCase {
+    /// macOS defaults as stored in com.apple.symbolichotkeys (60 ⌃Space, 61 ⌃⌥Space, 64 ⌘Space),
+    /// plus a disabled entry and an unset key code that must be ignored.
+    nonisolated(unsafe) static let macDefaults: [String: Any] = [
+        "60": ["enabled": true, "value": ["parameters": [32, 49, 262144], "type": "standard"]],
+        "61": ["enabled": true, "value": ["parameters": [32, 49, 786432], "type": "standard"]],
+        "64": ["enabled": NSNumber(value: 1), "value": ["parameters": [NSNumber(value: 65535), NSNumber(value: 49), NSNumber(value: 1048576)], "type": "standard"]],
+        "65": ["enabled": false, "value": ["parameters": [32, 49, 1572864], "type": "standard"]],
+        "70": ["enabled": true, "value": ["parameters": [65535, 65535, 0], "type": "standard"]],
+        "bad": ["enabled": true],
+    ]
+
+    func testParsesEnabledSystemShortcuts() {
+        let s = SystemShortcut.parse(Self.macDefaults)
+        XCTAssertEqual(s, [SystemShortcut(id: 60, keyCode: 49, carbonModifiers: 0x1000),
+                           SystemShortcut(id: 61, keyCode: 49, carbonModifiers: 0x1800),
+                           SystemShortcut(id: 64, keyCode: 49, carbonModifiers: 0x100)])
+        XCTAssertEqual(SystemShortcut.carbon(fromCocoa: 131072 | 8388608), 0x200, "fn bit ignored")
+        XCTAssertEqual(s[1].name(.korean), "입력 메뉴에서 다음 소스 선택")
+    }
+
+    func testDefaultsNeverTakeOverInputSourceSwitching() {
+        let system = SystemShortcut.parse(Self.macDefaults)
+        XCTAssertEqual(HotkeyBindings.validate(HotkeyBindings.defaults, system: system), [])
+        XCTAssertTrue(HotkeyBindings.resolvingSystemConflicts(HotkeyBindings.defaults, system: system).fixes.isEmpty)
+        XCTAssertEqual(HotkeyBindings.defaults[.pushToTalk], KeyCombo(key: "space", modifiers: [.option, .shift]))
+    }
+
+    func testOldPushToTalkBindingMovesOffCtrlOptionSpace() {
+        // Settings saved by earlier builds: push-to-talk on ⌃⌥Space, which swallowed 한/영 switching
+        // (and Karabiner's right ⌘ → ⌃⌥Space rule).
+        let system = SystemShortcut.parse(Self.macDefaults)
+        var old = HotkeyBindings.defaults
+        old[.pushToTalk] = KeyCombo(key: "space", modifiers: [.control, .option])
+        XCTAssertTrue(HotkeyBindings.validate(old, system: system).contains { $0.contains("Select next source in Input menu") })
+        let r = HotkeyBindings.resolvingSystemConflicts(old, system: system)
+        XCTAssertEqual(r.bindings[.pushToTalk], KeyCombo(key: "space", modifiers: [.option, .shift]))
+        XCTAssertEqual(r.fixes, [.init(action: .pushToTalk, from: KeyCombo(key: "space", modifiers: [.control, .option]),
+                                       to: KeyCombo(key: "space", modifiers: [.option, .shift]), system: system[1])])
+        XCTAssertEqual(HotkeyBindings.validate(r.bindings, system: system), [])
+    }
+
+    func testConflictWithoutFreeDefaultIsRemovedButEmergencyStopKept() {
+        let system = SystemShortcut.parse(Self.macDefaults)
+        var b = HotkeyBindings.defaults
+        b[.guide] = KeyCombo(key: "space", modifiers: [.command])            // Spotlight
+        b[.region] = KeyCombo(key: "g", modifiers: [.option, .shift])        // takes guide's default
+        b[.emergencyStop] = KeyCombo(key: "space", modifiers: [.control])    // input source, default free → moved
+        let r = HotkeyBindings.resolvingSystemConflicts(b, system: system)
+        XCTAssertNil(r.bindings[.guide], "guide's default is taken by region, so guide is unbound")
+        XCTAssertEqual(r.bindings[.emergencyStop], HotkeyBindings.defaults[.emergencyStop])
+        let stopOnly = SystemShortcut(id: 99, keyCode: 47, carbonModifiers: 0x1900)
+        let kept = HotkeyBindings.resolvingSystemConflicts(HotkeyBindings.defaults, system: [stopOnly])
+        XCTAssertEqual(kept.bindings[.emergencyStop], HotkeyBindings.defaults[.emergencyStop], "emergency stop is never removed")
+        XCTAssertTrue(kept.fixes.isEmpty)
+    }
+
     func testDefaultsValidAndCarbonMasks() {
         XCTAssertEqual(HotkeyBindings.validate(HotkeyBindings.defaults), [])
         XCTAssertEqual(HotkeyBindings.carbonModifiers(KeyCombo(key: "space", modifiers: [.option])), 0x800)

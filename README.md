@@ -12,7 +12,7 @@ selected text, points at UI elements with on-screen overlays, talks with push-to
 | Screen awareness | Reads the active app/window via Accessibility; captures window/region with ScreenCaptureKit only when needed; Vision OCR (ko/en); answers with conversational follow-up. |
 | Selection actions | Explain / Summarize / Translate (ko↔en) / Rewrite / Custom on AX-selected text or a drawn region; approved in-place replacement. No clipboard monitoring. |
 | Visual guidance | Arrows, circles, highlights and labels in click-through overlays on every display; anchored to AX elements and removed when targets change. |
-| Voice | Push-to-talk (hold ⌃⌥Space or the mic button), partial transcripts, ko-KR/en-US, on-device when available, spoken answers, interrupt/cancel, text fallback. |
+| Voice | Push-to-talk (hold ⌥⇧Space or the mic button), partial transcripts, ko-KR/en-US, on-device when available, spoken answers, interrupt/cancel, text fallback. |
 | Models | Anthropic API, OpenAI-compatible/local endpoints, or a Claude / ChatGPT subscription via the Claude Code / Codex CLI (no API key). |
 | Coding agents | Claude Code (`claude -p --output-format stream-json`, approvals via bundled MCP relay) and Codex (`codex app-server`, or `codex exec --json`); progress, tool activity, approvals, cancel, resume, crash recovery. |
 | Computer use | Typed actions (click, type, menu, keys, scroll, wait, focus) with Observe → Identify → Validate → Authorize → Execute → Re-observe → Verify. |
@@ -38,8 +38,15 @@ swift build --build-tests
 swift test
 ```
 ```bash
+scripts/macos/setup-dev-signing.sh
+```
+```bash
 scripts/macos/package-app.sh
 ```
+`setup-dev-signing.sh` (once per Mac) creates a local signing certificate in its own keychain file, so every build has
+the same identity and macOS permissions survive rebuilds. Without it builds are ad-hoc signed and lose them each time.
+Full Xcode is required (Command Line Tools lack XCTest and the SwiftUI macros); if `xcode-select` points elsewhere,
+prefix commands with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 The last command produces `dist/Tagen.app`, `dist/Tagen.zip`, `dist/TagenFixture.app` and `dist/tagen-gui-check`.
 
 Live GUI verification (grant Accessibility to `dist/tagen-gui-check` first):
@@ -56,7 +63,10 @@ scripts/linux/test.sh
 ```
 
 ## Shortcuts
-⌥Space assistant · ⌃⌥Space (hold) talk · ⌥⇧S explain selection · ⌥⇧G guide · ⌥⇧R region · ⌃⌥⌘. emergency stop
+⌥Space assistant · ⌥⇧Space (hold) talk · ⌥⇧S explain selection · ⌥⇧G guide · ⌥⇧R region · ⌃⌥⌘. emergency stop
+
+Tagen never registers a shortcut that is an enabled macOS shortcut (e.g. ⌃Space / ⌃⌥Space for switching input
+sources): such bindings are moved to the action's default or left unbound, with a notice.
 
 ## Documentation
 [Architecture](docs/architecture.md) · [Progress](docs/progress.md) · [Test results](docs/test-results.md) ·

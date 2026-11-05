@@ -87,8 +87,8 @@ final class CodexCLIModelClientTests: XCTestCase {
 
     func testNotSignedInMapsToAuthentication() async {
         let e = await error(of: client("auth").stream(request([.user("q")]), model: ""))
-        guard case .authentication(let m)? = e else { return XCTFail("got \(String(describing: e))") }
-        XCTAssertTrue(m.hasPrefix("Codex"))
+        guard case .cliSignedOut(let tool, let detail)? = e else { return XCTFail("got \(String(describing: e))") }
+        XCTAssertEqual(tool, "Codex"); XCTAssertTrue(detail.contains("401"), detail)
         XCTAssertTrue(e!.userMessage(.korean).contains("Codex"))
     }
 
@@ -117,7 +117,7 @@ final class CodexCLIModelClientTests: XCTestCase {
 
     func testMissingExecutableAndRouting() async throws {
         let e = await error(of: CodexCLIModelClient(executable: nil, environment: [:]).stream(request([.user("q")]), model: ""))
-        guard case .notConfigured? = e else { return XCTFail("got \(String(describing: e))") }
+        XCTAssertEqual(e, .cliUnavailable(tool: "Codex"))
         XCTAssertTrue(e!.userMessage(.english).contains("Codex CLI"))
         var s = ModelSettings.default; s.routes = ModelSettings.chatGPTSubscriptionRoutes
         let router = ModelRouter(settings: s, clients: [.codexCLI: client("success")])

@@ -89,8 +89,8 @@ final class ClaudeCLIModelClientTests: XCTestCase {
 
     func testNotSignedInMapsToAuthentication() async {
         let e = await error(of: client("auth").stream(request([.user("q")]), model: "sonnet"))
-        guard case .authentication(let m)? = e else { return XCTFail("got \(String(describing: e))") }
-        XCTAssertTrue(m.hasPrefix("Claude Code"))
+        guard case .cliSignedOut(let tool, let detail)? = e else { return XCTFail("got \(String(describing: e))") }
+        XCTAssertEqual(tool, "Claude Code"); XCTAssertTrue(detail.contains("/login"), detail)
         XCTAssertTrue(e!.userMessage(.korean).contains("Claude Code"))
         XCTAssertFalse(e!.userMessage(.english).contains("API key"))
     }
@@ -117,8 +117,9 @@ final class ClaudeCLIModelClientTests: XCTestCase {
     func testMissingExecutableIsNotConfiguredAndRouterFallsBack() async throws {
         let missing = ClaudeCLIModelClient(executable: nil, environment: [:])
         let e = await error(of: missing.stream(request([.user("q")]), model: "sonnet"))
-        guard case .notConfigured(let m)? = e else { return XCTFail("got \(String(describing: e))") }
-        XCTAssertTrue(e!.userMessage(.english).contains("Claude Code CLI"), m)
+        XCTAssertEqual(e, .cliUnavailable(tool: "Claude Code"))
+        XCTAssertTrue(e!.isMissingProvider, "router may fall back")
+        XCTAssertTrue(e!.userMessage(.english).contains("Claude Code CLI"))
 
         var s = ModelSettings.default
         s.routes = ModelSettings.claudeSubscriptionRoutes

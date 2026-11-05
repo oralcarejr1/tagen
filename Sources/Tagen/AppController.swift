@@ -19,7 +19,8 @@ final class AppController {
     private(set) var router: ModelRouter
     private(set) var orchestrator: AssistantOrchestrator
     private(set) var broker: ApprovalBroker!
-    private(set) var agentManager: AgentTaskManager!
+    /// Rebuilt by rebuildAgentManager() (AppController+Agents) when settings change.
+    var agentManager: AgentTaskManager!
     private(set) var voice: VoiceController!
     private(set) var permissions: MacPermissionChecker!
     var overlay: OverlayController!
@@ -27,7 +28,7 @@ final class AppController {
     var statusBar: StatusBarController?
     private var assistantTask: Task<Void, Never>?
     private var actTask: Task<Void, Never>?
-    private var loginShellPATH: String?
+    private(set) var loginShellPATH: String?
     private var permissionTimer: Timer?
     /// Thread-safe copy of settings for non-main-actor readers (permission checker).
     let settingsBox = Locked(AppSettings())
@@ -78,14 +79,16 @@ final class AppController {
             .appendingPathComponent("Tagen", isDirectory: true).appendingPathComponent("tagen.sqlite")
     }
 
+    /// CLI discovery, credentials and folders for agents and subscription model providers.
+    static func makeToolchain(settings: AppSettings, secrets: SecretStore, loginShellPATH: String?) -> CLIToolchain {
+        let dirs = CLIToolchain.userCachesLayout()
+        return CLIToolchain(pathOverrides: settings.cliPathOverrides, secrets: secrets, loginShellPATH: loginShellPATH,
+                            runtimeDirectory: dirs.runtime, modelDirectory: dirs.model)
+    }
+    var toolchain: CLIToolchain { Self.makeToolchain(settings: state.settings, secrets: secrets, loginShellPATH: loginShellPATH) }
+
     static func makeRouter(settings: AppSettings, secrets: SecretStore, loginShellPATH: String? = nil) -> ModelRouter {
-        var clients: [ProviderKind: ModelClient] = [:]
-        let auth = AgentAuthManager(locator: ExecutableLocator(overrides: settings.cliPathOverrides), secrets: secrets, loginShellPATH: loginShellPATH)
-        let modelCwd = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("Tagen/model-cwd").path
-        clients[.claudeCLI] = ClaudeCLIModelClient(executable: auth.executable(.claudeCode), environment: auth.environment(for: .claudeCode),
-                                                   workingDirectory: modelCwd)
-        clients[.codexCLI] = CodexCLIModelClient(executable: auth.executable(.codex), environment: auth.environment(for: .codex),
-                                                 workingDirectory: modelCwd.map { $0 + "-codex" })
+        var clients = makeToolchain(settings: settings, secrets: secrets, loginShellPATH: loginShellPATH).modelClients
         let anthropicKey = ((try? secrets.get(SecretKey.anthropicAPIKey)) ?? nil) ?? ""
         clients[.anthropic] = AnthropicClient(apiKey: anthropicKey, enableRefusalFallback: settings.models.enableRefusalFallback)
         if let url = URL(string: settings.models.openAIBaseURL) {
@@ -104,26 +107,6 @@ final class AppController {
                         onStateChange: { [weak self] st in Task { @MainActor in self?.state.voiceState = st } })
     }
 
-    func rebuildAgentManager() {
-        let settings = state.settings
-        let locator = ExecutableLocator(overrides: settings.cliPathOverrides)
-        let auth = AgentAuthManager(locator: locator, secrets: secrets, loginShellPATH: loginShellPATH)
-        let mcp = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/tagen-approval-mcp").path
-        let runtime = (FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("Tagen/run").path) ?? NSTemporaryDirectory()
-        try? FileManager.default.createDirectory(atPath: runtime, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let claude = ClaudeCodeAdapter(executable: auth.executable(.claudeCode), environment: auth.environment(for: .claudeCode),
-                                       approvalMCPPath: FileManager.default.isExecutableFile(atPath: mcp) ? mcp : nil, runtimeDirectory: runtime)
-        let codex: CodingAgentAdapter = settings.codexMode == .appServer
-            ? CodexAppServerAdapter(executable: auth.executable(.codex), environment: auth.environment(for: .codex))
-            : CodexExecAdapter(executable: auth.executable(.codex), environment: auth.environment(for: .codex))
-        agentManager = AgentTaskManager(adapters: [.claudeCode: claude, .codex: codex], approvals: broker, store: store, stop: stop)
-        let mgr = agentManager!
-        Task { await mgr.installEmergencyStop() }
-        Task { [weak self] in
-            await mgr.observe { snap in Task { @MainActor in self?.state.agentTasks[snap.id] = snap } }
-        }
-    }
-
     // MARK: lifecycle
 
     func start() {
@@ -135,37 +118,15 @@ final class AppController {
         }
         refreshPermissions()
         loadHistory()
-        permissionTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { if self?.panel?.isVisible == true { self?.refreshPermissions() } }
+        // Status checks are cheap system calls: poll, and also refresh as soon as Tagen becomes active
+        // again (e.g. after granting a permission in System Settings).
+        permissionTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshPermissions() }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshPermissions() }
         }
         if !state.settings.onboardingCompleted { openSettings(tab: .permissions) }
-    }
-
-    func registerHotkeys() {
-        let hk = GlobalHotkeys.shared
-        hk.unregisterAll()
-        hk.failures.removeAll()
-        let b = state.settings.hotkeys
-        func reg(_ a: HotkeyAction, press: @escaping () -> Void, release: (() -> Void)? = nil) {
-            guard let combo = b[a], let key = GlobalHotkeys.Hotkey(combo) else { return }
-            hk.register(key, name: a.rawValue, onPress: press, onRelease: release)
-        }
-        reg(.toggleAssistant, press: { [weak self] in self?.togglePanel() })
-        reg(.pushToTalk, press: { [weak self] in self?.pushToTalk(down: true) }, release: { [weak self] in self?.pushToTalk(down: false) })
-        reg(.emergencyStop, press: { [weak self] in self?.emergencyStop() })
-        reg(.explainSelection, press: { [weak self] in self?.state.mode = .ask; self?.showPanel(focus: true); self?.runSelection(.explain) })
-        reg(.guide, press: { [weak self] in self?.state.mode = .guide; self?.showPanel(focus: true) })
-        reg(.region, press: { [weak self] in self?.askAboutRegion() })
-        if !hk.failures.isEmpty {
-            state.errorMessage = state.t("Some shortcuts could not be registered (in use by another app): ", "일부 단축키를 등록하지 못했습니다 (다른 앱이 사용 중): ")
-                + hk.failures.joined(separator: ", ")
-        }
-    }
-
-    func setVoiceLanguage(_ lang: LanguageCode) {
-        var s = state.settings
-        s.voice.recognitionLanguage = lang
-        saveSettings(s)
     }
 
     // MARK: panel
@@ -393,57 +354,9 @@ final class AppController {
         Task { try? await Task.sleep(nanoseconds: 1_000_000_000); self.stop.reset() }
     }
 
-    // MARK: agents
+    // MARK: settings
 
-    func startAgent(provider: AgentProvider, folder: String, prompt: String, profile: AgentPermissionProfile, model: String?) {
-        let s = state.settings
-        guard s.agentExecutionEnabled else { state.errorMessage = state.t("Enable coding-agent execution in Settings › Agents first.", "설정 › 에이전트에서 코딩 에이전트 실행을 먼저 켜세요."); return }
-        guard s.isAllowedProjectFolder(folder) else { state.errorMessage = state.t("Choose a project folder you have allowed in Settings.", "설정에서 허용한 프로젝트 폴더를 선택하세요."); return }
-        let spec = AgentTaskSpec(provider: provider, prompt: prompt, workingDirectory: folder, model: model, permissionProfile: profile)
-        let mgr = agentManager!
-        Task { [weak self] in
-            let (id, stream) = await mgr.start(spec)
-            self?.state.selectedAgentTask = id
-            for await _ in stream {}
-            self?.loadHistory()
-        }
-    }
-
-    func cancelAgent(_ id: UUID) { let m = agentManager!; Task { await m.cancel(id) } }
-
-    func resumeAgent(_ id: UUID, prompt: String) {
-        let mgr = agentManager!
-        Task { [weak self] in
-            guard let (_, stream) = await mgr.resume(taskID: id, prompt: prompt) else {
-                self?.state.errorMessage = "This task has no resumable session."; return
-            }
-            for await _ in stream {}
-        }
-    }
-
-    func refreshAgentAuth() {
-        let auth = AgentAuthManager(locator: ExecutableLocator(overrides: state.settings.cliPathOverrides), secrets: secrets, loginShellPATH: loginShellPATH)
-        for p in AgentProvider.allCases {
-            Task { [weak self] in
-                let st = await auth.status(p)
-                self?.state.agentAuth[p] = st
-            }
-        }
-    }
-
-    /// Opens Terminal with the CLI's own login command (the supported auth flow on the Mac).
-    func openLogin(_ p: AgentProvider) {
-        let auth = AgentAuthManager(locator: ExecutableLocator(overrides: state.settings.cliPathOverrides), secrets: secrets, loginShellPATH: loginShellPATH)
-        guard let exe = auth.executable(p) else { state.errorMessage = "\(p.displayName) CLI not found."; return }
-        let script = "#!/bin/zsh -l\n\(AgentAuthManager.loginCommand(p, executable: exe))\necho\necho 'You can close this window and return to Tagen.'\n"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tagen-login-\(p.rawValue).command")
-        try? script.write(to: url, atomically: true, encoding: .utf8)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
-        NSWorkspace.shared.open(url)
-    }
-
-    // MARK: settings / permissions / history
-
+    /// Applies new settings and rebuilds everything that depends on them.
     func saveSettings(_ s: AppSettings) {
         state.settings = s
         settingsBox.set(s)
@@ -458,71 +371,7 @@ final class AppController {
         statusBar?.rebuildMenu()
     }
 
-    func setSecret(_ key: String, _ value: String) {
-        if value.isEmpty { try? secrets.delete(key) } else { try? secrets.set(key, value: value) }
-        state.hasAnthropicKey = ((try? secrets.get(SecretKey.anthropicAPIKey)) ?? nil)?.isEmpty == false
-        saveSettings(state.settings)
-    }
-
-    func refreshPermissions() {
-        let checker = permissions!
-        Task { [weak self] in
-            var out: [PermissionKind: PermissionState] = [:]
-            for k in PermissionKind.allCases { out[k] = await checker.status(k) }
-            self?.state.permissions = out
-        }
-    }
-
-    func requestPermission(_ k: PermissionKind) {
-        let checker = permissions!
-        Task { [weak self] in _ = await checker.request(k); self?.refreshPermissions() }
-    }
-
-    func openPermissionSettings(_ k: PermissionKind) {
-        let checker = permissions!
-        Task { await checker.openSystemSettings(for: k) }
-    }
-
-    func loadHistory() {
-        state.history = (try? store?.conversations()) ?? []
-    }
-
-    func openConversation(_ id: UUID) { state.historyMessages = (try? store?.messages(conversationID: id)) ?? [] }
-
-    /// Continue a past conversation from the History tab.
-    func continueConversation(_ id: UUID) {
-        let orch = orchestrator
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let n = try await orch.resumeConversation(recordID: id)
-                self.state.response = ""; self.state.context = nil; self.state.input = ""
-                self.state.tab = .assistant; self.state.mode = .ask
-                self.state.status = self.state.t("Continuing a conversation with \(n) earlier messages.", "이전 메시지 \(n)개가 있는 대화를 이어갑니다.")
-            } catch { self.state.errorMessage = "\(error)" }
-        }
-    }
-
-    func deleteAllHistory() { try? store?.deleteAllHistory(); state.historyMessages = []; loadHistory() }
-
-    func newConversation() {
-        Task { await orchestrator.newConversation() }
-        state.response = ""; state.input = ""; state.context = nil; overlay.clear()
-    }
-
     var settingsWindow: NSWindow?
-    func openSettings(tab: SettingsTab = .general) {
-        if settingsWindow == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 560), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-            w.title = "Tagen Settings"
-            w.isReleasedWhenClosed = false
-            settingsWindow = w
-        }
-        settingsWindow?.contentView = NSHostingView(rootView: SettingsView(initialTab: tab).environmentObject(state).environment(\.appController, self))
-        settingsWindow?.center()
-        NSApp.activate(ignoringOtherApps: true)
-        settingsWindow?.makeKeyAndOrderFront(nil)
-    }
 }
 
 private struct AppControllerKey: EnvironmentKey { static let defaultValue: AppController? = nil }

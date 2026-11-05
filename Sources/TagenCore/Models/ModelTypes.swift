@@ -90,6 +90,10 @@ public enum ModelStreamEvent: Sendable, Equatable {
 
 public enum ModelError: Error, Sendable, Equatable, CustomStringConvertible {
     case notConfigured(String)
+    /// A CLI-backed provider's command-line tool (e.g. "Claude Code", "Codex") is not installed or could not start.
+    case cliUnavailable(tool: String)
+    /// A CLI-backed provider's tool is installed but not signed in.
+    case cliSignedOut(tool: String, detail: String)
     case authentication(String)
     case permission(String)
     case rateLimited(retryAfter: Double?)
@@ -102,6 +106,14 @@ public enum ModelError: Error, Sendable, Equatable, CustomStringConvertible {
     case cancelled
     case decoding(String)
 
+    /// The provider cannot serve requests at all (no key, CLI missing): the router may try its fallback.
+    public var isMissingProvider: Bool {
+        switch self {
+        case .notConfigured, .cliUnavailable: return true
+        default: return false
+        }
+    }
+
     public var isRetryable: Bool {
         switch self {
         case .rateLimited, .overloaded, .network, .timeout: return true
@@ -113,6 +125,8 @@ public enum ModelError: Error, Sendable, Equatable, CustomStringConvertible {
     public var description: String {
         switch self {
         case .notConfigured(let m): return "Model provider not configured: \(m)"
+        case .cliUnavailable(let tool): return "\(tool) CLI not found"
+        case .cliSignedOut(let tool, let detail): return "\(tool) is not signed in: \(detail)"
         case .authentication(let m): return "Authentication failed: \(m)"
         case .permission(let m): return "Permission denied by provider: \(m)"
         case .rateLimited(let r): return "Rate limited" + (r.map { " (retry after \(Int($0))s)" } ?? "")
@@ -130,22 +144,10 @@ public enum ModelError: Error, Sendable, Equatable, CustomStringConvertible {
     /// Localized, user-facing explanation.
     public func userMessage(_ lang: LanguageCode) -> String {
         switch (self, lang) {
-        case (.notConfigured(let m), .korean) where m.hasPrefix("Claude Code"):
-            return "Claude Code CLI를 찾을 수 없습니다. Claude Code를 설치하거나 설정 > 에이전트에서 경로를 지정하세요."
-        case (.notConfigured(let m), _) where m.hasPrefix("Claude Code"):
-            return "Claude Code CLI was not found. Install Claude Code or set its path in Settings › Agents."
-        case (.authentication(let m), .korean) where m.hasPrefix("Claude Code"):
-            return "Claude Code에 로그인되어 있지 않습니다. 설정 > 에이전트에서 Claude Code 로그인을 하세요."
-        case (.authentication(let m), _) where m.hasPrefix("Claude Code"):
-            return "Claude Code is not signed in. Use Sign in… for Claude Code in Settings › Agents."
-        case (.notConfigured(let m), .korean) where m.hasPrefix("Codex"):
-            return "Codex CLI를 찾을 수 없습니다. Codex를 설치하거나 설정 > 에이전트에서 경로를 지정하세요."
-        case (.notConfigured(let m), _) where m.hasPrefix("Codex"):
-            return "Codex CLI was not found. Install Codex or set its path in Settings › Agents."
-        case (.authentication(let m), .korean) where m.hasPrefix("Codex"):
-            return "Codex에 로그인되어 있지 않습니다. 설정 > 에이전트에서 Codex 로그인을 하세요."
-        case (.authentication(let m), _) where m.hasPrefix("Codex"):
-            return "Codex is not signed in. Use Sign in… for Codex in Settings › Agents."
+        case (.cliUnavailable(let tool), .korean): return "\(tool) CLI를 찾을 수 없습니다. \(tool)를 설치하거나 설정 > 에이전트에서 경로를 지정하세요."
+        case (.cliUnavailable(let tool), _): return "\(tool) CLI was not found. Install \(tool) or set its path in Settings › Agents."
+        case (.cliSignedOut(let tool, _), .korean): return "\(tool)에 로그인되어 있지 않습니다. 설정 > 에이전트에서 \(tool) 로그인을 하세요."
+        case (.cliSignedOut(let tool, _), _): return "\(tool) is not signed in. Use Sign in… for \(tool) in Settings › Agents."
         case (.notConfigured, .korean): return "모델 API 키가 설정되지 않았습니다. 설정 > 모델에서 키를 입력하세요."
         case (.authentication, .korean): return "API 인증에 실패했습니다. 설정에서 API 키를 확인하세요."
         case (.rateLimited, .korean), (.overloaded, .korean): return "모델 서비스가 혼잡합니다. 잠시 후 다시 시도하세요."

@@ -2,6 +2,7 @@
 import SwiftUI
 import TagenCore
 import TagenAgents
+import TagenMac
 
 enum SettingsTab: String, CaseIterable { case general, permissions, models, privacy, voice, agents, computerUse }
 
@@ -59,7 +60,7 @@ struct SettingsView: View {
                         Text(draft.hotkeys[a]?.description ?? "—").font(.system(.body, design: .monospaced)).frame(width: 70, alignment: .trailing)
                     }
                 }
-                let problems = HotkeyBindings.validate(draft.hotkeys)
+                let problems = HotkeyBindings.validate(draft.hotkeys, system: MacSystemShortcuts.current())
                 if !problems.isEmpty {
                     ForEach(problems, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
                 }
@@ -70,7 +71,7 @@ struct SettingsView: View {
                 Text(state.t("Panel open latency (median, this session): ", "패널 열림 지연 (중앙값, 이번 세션): ") + String(format: "%.1f ms", lat)).font(.caption)
             }
             Button(state.t("Save", "저장")) { draft.onboardingCompleted = true; save() }.buttonStyle(.borderedProminent)
-                .disabled(!HotkeyBindings.validate(draft.hotkeys).isEmpty)
+                .disabled(!HotkeyBindings.validate(draft.hotkeys, system: MacSystemShortcuts.current()).isEmpty)
         }
         .formStyle(.grouped)
     }
@@ -231,8 +232,10 @@ struct PermissionsView: View {
             }
             HStack {
                 Button(state.t("Refresh", "새로 고침")) { app?.refreshPermissions() }
+                Button(state.t("Relaunch Tagen", "Tagen 다시 시작")) { app?.relaunch() }
                 Spacer()
-                Text(state.t("Development builds are ad-hoc signed: macOS may ask again after each update.", "개발 빌드는 임시 서명이므로 업데이트 후 다시 허용해야 할 수 있습니다.")).font(.caption2)
+                Text(state.t("Screen Recording takes effect after a relaunch. If a switch is on in System Settings but Tagen still shows it missing, remove Tagen from that list and request again.",
+                             "화면 기록은 다시 시작해야 적용됩니다. 시스템 설정에서 켜져 있는데 Tagen에 없다고 나오면 목록에서 Tagen을 지우고 다시 요청하세요.")).font(.caption2)
             }
         }
         .padding()

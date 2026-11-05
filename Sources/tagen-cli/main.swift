@@ -65,6 +65,12 @@ func emit(_ e: AgentEvent, json: Bool) {
     }
 }
 
+/// CLI discovery for this invocation; `--exe PATH` overrides the given tool's location.
+func toolchain(_ o: [String: String], tool: String) -> CLIToolchain {
+    CLIToolchain(pathOverrides: o["--exe"].map { [tool: $0] } ?? [:], secrets: InMemorySecretStore(),
+                 loginShellPATH: ExecutableLocator.loginShellPATH())
+}
+
 func runAgent(_ args: [String]) async throws -> Int32 {
     let (o, flags, pos) = parseOptions(args)
     guard let prompt = pos.first else { throw CLIError(description: "missing PROMPT") }
@@ -72,21 +78,16 @@ func runAgent(_ args: [String]) async throws -> Int32 {
     let provider: AgentProvider = providerArg.hasPrefix("codex") ? .codex : .claudeCode
     let cwd = o["--cwd"] ?? FileManager.default.currentDirectoryPath
     let profile: AgentPermissionProfile = ["read-only": .readOnly, "auto-edits": .autoEditsInProject][o["--profile"] ?? ""] ?? .askEveryTime
-    let shellPATH = ExecutableLocator.loginShellPATH()
-    var locator = ExecutableLocator()
-    if let exe = o["--exe"] { locator.overrides[provider.executableName] = exe }
-    let auth = AgentAuthManager(locator: locator, secrets: InMemorySecretStore(), loginShellPATH: shellPATH)
-    let env = auth.environment(for: provider)
-    let exe = auth.executable(provider)
+    let tools = toolchain(o, tool: provider.executableName)
     let mcp = o["--mcp"] ?? {
         let here = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("tagen-approval-mcp").path
         return FileManager.default.isExecutableFile(atPath: here) ? here : nil
     }()
     let adapter: CodingAgentAdapter
     switch providerArg {
-    case "codex": adapter = CodexAppServerAdapter(executable: exe, environment: env)
-    case "codex-exec": adapter = CodexExecAdapter(executable: exe, environment: env)
-    default: adapter = ClaudeCodeAdapter(executable: exe, environment: env, approvalMCPPath: mcp)
+    case "codex": adapter = tools.codexAdapter(appServer: true)
+    case "codex-exec": adapter = tools.codexAdapter(appServer: false)
+    default: adapter = tools.claudeCodeAdapter(approvalMCPPath: mcp)
     }
     let broker = ApprovalBroker(presenter: CLIPresenter(mode: o["--approve"] ?? "ask"), timeout: 600)
     let manager = AgentTaskManager(adapters: [provider: adapter], approvals: broker, store: nil)
@@ -108,10 +109,7 @@ func runAgent(_ args: [String]) async throws -> Int32 {
 func agentStatus(_ args: [String]) async -> Int32 {
     let (o, _, _) = parseOptions(args)
     let provider: AgentProvider = (o["--provider"] ?? "claude").hasPrefix("codex") ? .codex : .claudeCode
-    var locator = ExecutableLocator()
-    if let exe = o["--exe"] { locator.overrides[provider.executableName] = exe }
-    let auth = AgentAuthManager(locator: locator, secrets: InMemorySecretStore(), loginShellPATH: ExecutableLocator.loginShellPATH())
-    let st = await auth.status(provider)
+    let st = await toolchain(o, tool: provider.executableName).auth.status(provider)
     print("\(provider.displayName): \(st)")
     if case .signedIn = st { return 0 }
     return 1
@@ -122,19 +120,12 @@ func ask(_ args: [String]) async throws -> Int32 {
     guard let q = pos.first else { throw CLIError(description: "missing question") }
     let client: ModelClient
     let defaultModel: String
-    if o["--provider"] == "claude-cli" {
-        var locator = ExecutableLocator()
-        if let exe = o["--exe"] { locator.overrides["claude"] = exe }
-        let auth = AgentAuthManager(locator: locator, secrets: InMemorySecretStore(), loginShellPATH: ExecutableLocator.loginShellPATH())
-        client = ClaudeCLIModelClient(executable: auth.executable(.claudeCode), environment: auth.environment(for: .claudeCode))
-        defaultModel = "sonnet"
-    } else if o["--provider"] == "codex-cli" {
-        var locator = ExecutableLocator()
-        if let exe = o["--exe"] { locator.overrides["codex"] = exe }
-        let auth = AgentAuthManager(locator: locator, secrets: InMemorySecretStore(), loginShellPATH: ExecutableLocator.loginShellPATH())
-        client = CodexCLIModelClient(executable: auth.executable(.codex), environment: auth.environment(for: .codex))
-        defaultModel = ""
-    } else {
+    switch o["--provider"] {
+    case "claude-cli":
+        client = toolchain(o, tool: "claude").claudeModelClient; defaultModel = "sonnet"
+    case "codex-cli":
+        client = toolchain(o, tool: "codex").codexModelClient; defaultModel = ""
+    default:
         client = AnthropicClient(apiKey: ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? "")
         defaultModel = AnthropicClient.defaultModel
     }

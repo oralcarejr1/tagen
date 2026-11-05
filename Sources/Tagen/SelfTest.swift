@@ -36,6 +36,13 @@ enum SelfTest {
             let r = AppController.makeRouter(settings: AppSettings(), secrets: InMemorySecretStore())
             return ("pass", "screenQuestion → \(r.route(for: .screenQuestion).model)")
         }
+        await check("hotkeys vs macOS shortcuts") {
+            let system = MacSystemShortcuts.current()
+            let fixes = HotkeyBindings.resolvingSystemConflicts(HotkeyBindings.defaults, system: system).fixes
+            let ids = system.map(\.id).filter { [60, 61, 64].contains($0) }
+            return (fixes.isEmpty ? "pass" : "fail",
+                    "\(system.count) enabled system shortcuts (input source/Spotlight ids: \(ids)); default conflicts: \(fixes.map { "\($0.action.rawValue)→\($0.system.id)" })")
+        }
         await check("display layout") {
             let l = MacDisplays.layout()
             return (l.displays.isEmpty ? "skip" : "pass", l.displays.map { "\($0.id) \($0.frame) @\($0.scale)x" }.joined(separator: "; "))
@@ -47,9 +54,8 @@ enum SelfTest {
             return ("pass", parts.joined(separator: ", "))
         }
         await check("agent CLI discovery (report only)") {
-            let loc = ExecutableLocator()
-            let path = ExecutableLocator.loginShellPATH()
-            return ("pass", AgentProvider.allCases.map { "\($0.executableName)=\(loc.locate($0.executableName, loginShellPATH: path) ?? "not found")" }.joined(separator: ", "))
+            let tools = CLIToolchain(secrets: InMemorySecretStore(), loginShellPATH: ExecutableLocator.loginShellPATH())
+            return ("pass", AgentProvider.allCases.map { "\($0.executableName)=\(tools.executable($0) ?? "not found")" }.joined(separator: ", "))
         }
         await check("approval relay helper bundled") {
             let mcp = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/tagen-approval-mcp").path

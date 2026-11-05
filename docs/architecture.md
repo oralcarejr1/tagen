@@ -106,6 +106,21 @@ overlays; Keychain for credentials; redaction everywhere text is persisted or lo
   turn ends. Only the last `agent_message` of the turn is returned (earlier ones are narration); `codex exec` does not
   stream text. `OPENAI_API_KEY`/`CODEX_API_KEY` are removed so billing follows the ChatGPT sign-in.
 
+- **CLI providers, shared pieces** — `CLIToolchain` (TagenAgents) is the single place that finds the `claude`/`codex`
+  CLIs, adds stored credentials and builds both the coding-agent adapters and the subscription model clients; the app,
+  `tagen-cli` and the self-test all use it. `CLIModelRun` owns the per-request process lifecycle (launch, JSONL parsing,
+  timeout, cancellation, exit classification) for both model clients, which only supply arguments and an output parser
+  (`ClaudeModelOutputParser`, `CodexModelOutputParser`). CLI failures are typed: `ModelError.cliUnavailable(tool:)`
+  (router may fall back) and `.cliSignedOut(tool:detail:)`.
+- **Shortcuts vs. macOS** — `SystemShortcut.parse` reads enabled entries of `com.apple.symbolichotkeys`;
+  `HotkeyBindings.resolvingSystemConflicts` moves any Tagen binding that equals one to the action's default (or unbinds
+  it) before Carbon registration, because a Carbon hot key swallows the keystroke (this broke ⌃⌥Space 한/영 switching,
+  which Karabiner "right ⌘" rules send). Settings refuses to save such a binding. Push-to-talk default is ⌥⇧Space.
+- **AppController layout** — `AppController.swift` (wiring, lifecycle, panel, Ask/Guide/Act, voice, emergency stop,
+  settings), `AppController+Agents.swift` (agent manager, tasks, CLI sign-in), `AppController+Settings.swift`
+  (shortcuts, secrets, permissions, history, settings window). Permission status refreshes every 3 s and when Tagen
+  becomes active.
+
 ## Verification levels
 1. Unit + integration tests on Linux (Docker, Swift 6.2) — TagenCore, TagenAgents (fake CLIs, real relay binary).
 2. macOS CI compile + the same tests + TagenMacTests (OCR, Keychain, display layout, overlay) on `macos-26`.

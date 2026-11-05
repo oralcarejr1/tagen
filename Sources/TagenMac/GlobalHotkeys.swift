@@ -19,7 +19,6 @@ public final class GlobalHotkeys {
         }
 
         public static let optionSpace = Hotkey(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
-        public static let controlOptionSpace = Hotkey(keyCode: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey))
         public static let emergencyStop = Hotkey(keyCode: UInt32(kVK_ANSI_Period), modifiers: UInt32(controlKey | optionKey | cmdKey))
         public static let selectionActions = Hotkey(keyCode: UInt32(kVK_ANSI_S), modifiers: UInt32(optionKey | shiftKey))
         public static let guide = Hotkey(keyCode: UInt32(kVK_ANSI_G), modifiers: UInt32(optionKey | shiftKey))
@@ -72,6 +71,13 @@ public final class GlobalHotkeys {
             }
             return noErr
         }, 2, &specs, nil, nil)
+    }
+}
+/// Reads the user's enabled macOS keyboard shortcuts (System Settings › Keyboard › Keyboard Shortcuts).
+public enum MacSystemShortcuts {
+    public static func current() -> [SystemShortcut] {
+        guard let d = UserDefaults(suiteName: "com.apple.symbolichotkeys")?.dictionary(forKey: "AppleSymbolicHotKeys") else { return [] }
+        return SystemShortcut.parse(d)
     }
 }
 #endif
