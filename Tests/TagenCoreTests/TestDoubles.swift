@@ -151,6 +151,7 @@ final class SimulatedGUIDriver: GUIDriver, @unchecked Sendable {
                 }
             case .axSetValue(let id, let v): if id.identifier == "nameField" { s.name = v }
             case .axFocus(let id): s.focused = id.identifier
+            case .axInsertText(let id, let t): if id.identifier == "nameField" { s.focused = "nameField"; s.name += t }
             case .typeKeystrokes(let t): if s.focused == "nameField" { s.name += t }   // keystrokes go to the focused field only
             case .menuPath(let path, _): if path == ["Fixture", "Set Counter to Zero"] { s.count = 0 }
             case .keyCombo(let k): if k.key == "r" && k.modifiers == [.command] { s.count = 0 }

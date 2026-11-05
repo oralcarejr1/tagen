@@ -9,6 +9,7 @@ public final class MacGUIDriver: GUIDriver, @unchecked Sendable {
     private let order = Locked<[UUID]>([])
     private let lastOwnEvent = Locked<Date>(.distantPast)
     private let excludePID: pid_t
+    private let lastPID = Locked<pid_t?>(nil)
     let eventSource = CGEventSource(stateID: .privateState)
 
     public init(excludePID: pid_t = ProcessInfo.processInfo.processIdentifier) { self.excludePID = excludePID }
@@ -27,6 +28,7 @@ public final class MacGUIDriver: GUIDriver, @unchecked Sendable {
         let layout = await MainActor.run { MacDisplays.layout() }
         guard let app = targetApp(scope: scopeBundleID) else { throw DriverError.elementNotFound("no target application") }
         let axApp = AXInspector.application(pid: app.processIdentifier)
+        lastPID.set(app.processIdentifier)
         let id = UUID()
         var root: AXElementSnapshot?
         var window: WindowInfo?
@@ -84,8 +86,19 @@ public final class MacGUIDriver: GUIDriver, @unchecked Sendable {
                 // Fallback: focus + select all + type.
                 if let f = h.frame { try click(at: f.center, button: .left, count: 1) }
                 try key(KeyCombo(key: "a", modifiers: [.command]))
-                try type(text)
+                try type(text, pid: id.pid)
                 return
+            }
+        case .axInsertText(let id, let text):
+            let h = try handle(for: id)
+            h.set(kAXFocusedAttribute as String, kCFBooleanTrue)
+            let before = h.string(kAXValueAttribute as String)
+            let err = h.set(kAXSelectedTextAttribute as String, text as CFString)
+            let after = h.string(kAXValueAttribute as String)
+            if err != .success || (before != nil && after == before) {
+                // AX insertion unsupported here: fall back to keystrokes into the focused field.
+                if let f = h.frame { try click(at: f.center, button: .left, count: 1) }
+                try type(text, pid: id.pid)
             }
         case .axFocus(let id):
             let h = try handle(for: id)
@@ -94,7 +107,7 @@ public final class MacGUIDriver: GUIDriver, @unchecked Sendable {
             let h = try handle(for: id)
             guard h.perform(kAXShowMenuAction as String) == .success else { throw DriverError.actionFailed("AXShowMenu failed") }
         case .mouseClick(let pt, let b, let n): try click(at: pt, button: b, count: n)
-        case .typeKeystrokes(let t): try type(t)
+        case .typeKeystrokes(let t): try type(t, pid: lastPID.current)
         case .keyCombo(let k): try key(k)
         case .menuPath(let path, let pid): try selectMenu(path, pid: pid)
         case .scroll(let at, let d, let amount): try scroll(at: at, d, amount: amount)
@@ -133,15 +146,18 @@ public final class MacGUIDriver: GUIDriver, @unchecked Sendable {
         }
     }
 
-    func type(_ text: String) throws {
-        for chunk in text.chunked(into: 16) {
-            let utf16 = Array(chunk.utf16)
+    /// Unicode keystrokes. Delivered directly to the target process when known (does not depend
+    /// on which app the HID event system routes to), with spacing between down and up.
+    func type(_ text: String, pid: pid_t?) throws {
+        for ch in text {
+            let utf16 = Array(String(ch).utf16)
             guard let d = CGEvent(keyboardEventSource: eventSource, virtualKey: 0, keyDown: true),
                   let u = CGEvent(keyboardEventSource: eventSource, virtualKey: 0, keyDown: false) else { throw DriverError.actionFailed("CGEvent") }
             d.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
             u.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
-            d.post(tap: .cghidEventTap); u.post(tap: .cghidEventTap)
-            usleep(15_000)
+            if let pid { d.postToPid(pid); usleep(8_000); u.postToPid(pid) }
+            else { d.post(tap: .cghidEventTap); usleep(8_000); u.post(tap: .cghidEventTap) }
+            usleep(8_000)
         }
     }
 

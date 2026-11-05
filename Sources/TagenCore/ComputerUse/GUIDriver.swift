@@ -37,6 +37,8 @@ public struct GUIObservation: Sendable, Equatable {
 public enum GUIPrimitive: Sendable, Equatable {
     case axPress(ElementIdentity)
     case axSetValue(ElementIdentity, String)
+    /// Insert text at the caret / replace the current selection (AXSelectedText).
+    case axInsertText(ElementIdentity, String)
     case axFocus(ElementIdentity)
     case axShowMenu(ElementIdentity)
     case mouseClick(Point, MouseButton, count: Int)

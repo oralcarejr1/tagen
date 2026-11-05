@@ -257,8 +257,14 @@ public struct ActionExecutor: Sendable {
             var steps: [GUIPrimitive] = []
             if let e = element {
                 let id = ElementIdentity(element: e, pid: pid)
-                if replace && !e.isSecure { steps.append(.axSetValue(id, text)) }
-                else { steps.append(.axFocus(id)); if replace { steps.append(.keyCombo(KeyCombo(key: "a", modifiers: [.command]))) }; steps.append(.typeKeystrokes(text)) }
+                if e.isSecure {
+                    // Secure fields: keyboard input only (values are not readable via AX anyway).
+                    steps.append(.axFocus(id)); if replace { steps.append(.keyCombo(KeyCombo(key: "a", modifiers: [.command]))) }; steps.append(.typeKeystrokes(text))
+                } else if replace {
+                    steps.append(.axSetValue(id, text))
+                } else {
+                    steps.append(.axInsertText(id, text))   // AX insertion at the caret; driver falls back to keystrokes
+                }
             } else {
                 steps.append(.typeKeystrokes(text))
             }
