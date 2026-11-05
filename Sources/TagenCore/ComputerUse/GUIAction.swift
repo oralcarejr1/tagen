@@ -105,7 +105,9 @@ public struct KeyCombo: Sendable, Codable, Equatable, CustomStringConvertible {
 
     public var description: String {
         let m = modifiers.map { ["command": "⌘", "shift": "⇧", "option": "⌥", "control": "⌃"][$0.rawValue]! }.joined()
-        return m + key.uppercased()
+        let names = ["space": "Space", "return": "↩", "enter": "⌅", "tab": "⇥", "escape": "⎋", "esc": "⎋",
+                     "delete": "⌫", "backspace": "⌫", "forwarddelete": "⌦", "left": "←", "right": "→", "up": "↑", "down": "↓"]
+        return m + (names[key] ?? key.uppercased())
     }
 }
 

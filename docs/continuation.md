@@ -4,13 +4,15 @@
    Codex/Claude Code bridge, safe computer use). See `CLAUDE.md`, `docs/architecture.md`.
 2. **Current phase** — Phase 6 (integration, packaging, verification, docs). All phases implemented.
 3. **Completed** — all modules, app UI, fixture + live checker, CI (Linux + macOS 26), packaging, docs.
-4. **Pending** — keep macOS CI green through package/smoke steps; record results in `docs/test-results.md`;
-   physical-Mac checklist (P1–P18 in test-results) cannot be done from the cloud.
-5. **Exact next action** — restore GitHub Actions billing/spending limit, then re-run CI on `feature/tagen-macos-assistant` (verifies UI fixes + probe overlay diff on macOS; review `ci-artifacts/runs/<n>-<sha>/ui/*.png`). After that: run the physical-Mac checklist (P1–P18). Previously: inspect the latest CI run on `feature/tagen-macos-assistant`
-   (GitHub Actions → CI); if green, download artifacts and update `docs/test-results.md`.
-6. **Latest test results** — CI run 41951686032 (98965ac): Linux ✔, macOS build/130 tests/package/self-test ✔, live GUI 27/27 safe, 5/5 safety, 0 unauthorized, anchor 0 pt, selection 5/5. Earlier: Linux: 126 tests pass (5/5 repeated runs earlier at 122). macOS CI run 6: 130 tests,
-   1 failure (rounding bug, fixed in 279d0a9).
+4. **Pending** — physical-Mac checklist (P1–P18 in test-results); real Codex/Claude Code runs with login on the Mac;
+   Developer ID signing + notarization (needs the user's certificate).
+5. **Exact next action** — run the physical-Mac checklist. CI is green and publishes reports + UI screenshots to the
+   `ci-artifacts` branch (`runs/<n>-<sha>/`); after each change review `ui/*.png` and `live-probe.log` there.
+6. **Latest test results** — Linux 151 tests ✔. macOS CI run 28 (8d956ac): build/tests/package/self-test ✔, live GUI
+   27/27 safe, 5/5 safety, 0 unauthorized, anchor 0 pt, selection 5/5; live probe 13/13 (TextEdit/Safari/Finder/TTS,
+   overlay alignment 0.5 pt, AX notifications ✔). Details: `docs/test-results.md`.
 7. **Commands** — `scripts/linux/test.sh` (Docker image `tagen-linux` from `scripts/linux/Dockerfile`);
    macOS: `swift test`, `scripts/macos/package-app.sh`, `scripts/macos/live-gui-check.sh`.
-8. **External blockers** — GitHub Actions jobs blocked by account billing/spending limit (since commit 5cd52c7); no Mac/GUI/microphone in cloud; CI runners lack TCC permissions (live GUI check reports
-   `blocked`); `www.heyclicky.com` not reachable from the session; real Codex/Claude CLIs intentionally not run.
+8. **External blockers** — no Mac/GUI/microphone in the cloud session; CI runners have no microphone/speech
+   permission; `www.heyclicky.com` not reachable from the session; real Codex/Claude CLIs intentionally not run here;
+   notarization needs a Developer ID.

@@ -5,7 +5,7 @@ Only results that were actually executed are recorded here. Verification levels:
 **L3** packaged-app smoke on CI · **L4** live GUI automation · **L5** physical Mac (manual).
 
 ## L1 — Linux (cloud container), commit 279d0a9 + later
-`scripts/linux/test.sh` → **126 tests, 0 failures**. Earlier the suite (122 tests then) was repeated 5× with 0 failures
+`scripts/linux/test.sh` → **151 tests, 0 failures** (latest, 5a145ce+; was 126 at 279d0a9). Earlier the suite (122 tests then) was repeated 5× with 0 failures
 (flakiness check of subprocess/timing tests).
 
 | Suite | What it proves |
@@ -21,6 +21,7 @@ Only results that were actually executed are recorded here. Verification levels:
 | WorkflowTests | W3 locate+highlight follows window move (≤ 12 pt), W4 spoken question→spoken answer, W10 permission revoked mid-task, **100 mixed sessions (ask/guide/selection/act/cancel) with 0 crashes** (test doubles) |
 
 ## L2 — macOS CI (`macos-26`, Xcode 26.6, macOS 26.7.2, Apple silicon)
+Latest green: run 28 (8d956ac) — build, XCTest, package, verify, smoke launch, self-test, live checks. First full run:
 Run 9 (commit fb4e9a7, branch `feature/tagen-macos-assistant`, run id 41947578149): **build ✔, 130 XCTest cases ✔
 (1 skipped)**, including TagenMacTests that run for real on the runner: Vision OCR of rendered Korean + English
 text with coordinate mapping, screenshot encode/downscale geometry, display layout vs `NSScreen`, Keychain
@@ -92,32 +93,40 @@ Prerequisites: macOS 14+ (tested build target), `Tagen.app` from CI artifact, An
 | P17 | Disconnect network; Ask | clear network error, no hang | network failure |
 | P18 | Quit and relaunch Tagen | settings, history and agent sessions persist; history contains no screenshots | restart/recovery |
 
-## L4b — Live probe on built-in apps (CI runner, commit e33394c, run id 41963634875)
-`tagen-live-probe` against real TextEdit / Safari / Finder (full report: branch `ci-artifacts`, `runs/21-e33394c/`):
+## L4b — Live probe on built-in apps (CI runner `macos-26`, macOS 26.6.2, 1024×768 @1×)
+`tagen-live-probe` against real TextEdit / Safari / Finder. Full reports: branch `ci-artifacts`, `runs/<n>-<sha>/`.
+Latest: **run 28, commit 8d956ac — 13 pass, 0 fail, 0 blocked** (also 13/13 in run 27, bf6fb5a).
 
-| Check | Result |
-|---|---|
-| TextEdit AX snapshot (13 elements) | median **179 ms** |
-| TextEdit context, AX only (found the Korean phrase) | **10 ms** ✔ |
-| TextEdit window screenshot (ScreenCaptureKit, 673×439 px) | 1.23 s ✔ |
-| OCR of the real window (Vision, ko+en) | 447 ms, 3 lines, Korean recognised ✔ |
-| Selected text via AX in TextEdit | "안녕하세요" exact, editable ✔ |
-| Safari local page via AX (Korean heading + button, URL extracted) | 37 elements, median **33 ms** ✔ |
-| Overlay alignment on Safari web button (pixel measurement) | **0.5 pt** ✔ |
-| Overlay alignment on TextEdit (text area / close button) | 17.5 / 16.5 pt ✘ — *measurement artefact*: the overlay's top-left edges matched within 0.5 pt, but the detector also picked up the window's yellow minimize button. Probe now diffs against a baseline capture (5cd52c7) — **re-run pending** |
-| Finder AX snapshot (296 elements) | median **64 ms** ✔ |
-| TTS ko-KR (Yuna) / en-US (Samantha) | audio produced (40 870 / 23 736 frames) ✔ |
-| Fixture live check, same run | 27/27 safe, 5/5 safety, 0 unauthorized ✔ |
+| Check | Run 21 (e33394c) | Run 28 (8d956ac) |
+|---|---|---|
+| TextEdit AX snapshot | 13 el., median 179 ms | 12 el., median **5.2 ms** |
+| TextEdit context, AX only (Korean phrase found) | 10 ms (1 sample) | median **6.5 ms**, first 6.5 ms (5 samples) |
+| TextEdit window screenshot (ScreenCaptureKit, 673×439 px) | 1.23 s | 4.10 s (first SCK call on the VM; see note) |
+| OCR of the real window (Vision, ko+en) | 447 ms, Korean ✔ | 916 ms, Korean ✔ |
+| Selected text via AX in TextEdit | "안녕하세요" ✔ | "안녕하세요" ✔ |
+| Overlay alignment, TextEdit text area / close button | ✘ measurement artefact | **0.5 / 0.5 pt** ✔ (baseline-diff detector) |
+| AX change notifications on window move | — | 4 registered, first after **102 ms** ✔ (68.6 ms in run 27) |
+| Safari local page via AX (Korean heading, button, URL) | 37 el., 33 ms | 37 el., 50 ms ✔ |
+| Overlay alignment, Safari web button | 0.5 pt | **0.5 pt** ✔ |
+| Finder AX snapshot | 296 el., 64 ms | 162 el., 142 ms ✔ |
+| TTS ko-KR (Yuna) / en-US (Samantha) | audio ✔ | audio ✔ (40 870 / 23 736 frames) |
+| Fixture live check, same run | 27/27, 5/5, 0 unauthorized | 27/27, 5/5, 0 unauthorized, anchor 0 pt, selection 5/5 |
 
-## UI review from CI screenshots (run 21, 14 PNGs: panel Ask/Guide/Act+approval/Agents, settings Permissions/Models/Computer Use, ko+en)
-Defects found and fixed in 5cd52c7 (**not yet re-rendered/compiled on macOS** — see below):
-- Korean bold showed raw `**` (`**PDF…**를`: CommonMark won't close `**` between punctuation and a Hangul particle) →
-  `InlineMarkdown` splits bold runs itself (unit-tested on Linux).
-- Korean UI mixed in English: risk level ("high"), permission states/descriptions, agent permission profiles, model
-  purpose keys → localized.
-- Settings forms rendered section titles as right-aligned labels → `.formStyle(.grouped)`.
+Note on timings: these are shared VMs. Run 27 measured a single context capture at 703 ms while the AX snapshot took
+25 ms; with 5 samples (run 28) the median is 6.5 ms. Screenshot latency varies 1.2–4.1 s between runs, mostly the
+first ScreenCaptureKit call; physical-Mac numbers (P-checklist) are what matters for UX.
+
+## UI review from CI screenshots (rendered by `Tagen --render-ui`, ko + en)
+- Run 21 → defects fixed in 5cd52c7, **confirmed in run 27/28 renders**: Korean bold no longer shows raw `**`
+  (`InlineMarkdown`), Korean UI no longer mixes English risk/permission/profile/purpose labels, settings use grouped forms.
+- Run 28 added Settings › General (shortcuts editor with live preview and validation) and Voice: both render correctly in
+  ko and en. Shortcut preview now shows `⌃⌥Space` / `⌘⌫` instead of `^⌥SPACE` (5a145ce+).
+- Run 27 → the **Act approval card** (real code path) showed English text, the raw element id (`Click [w0.4.2]`) and
+  AX role (`AXButton`) in the Korean UI. Fixed in 5a145ce: localized title/target/reasons (`'삭제' 클릭`,
+  `Mail — 받은편지함 — 대상: 버튼 '삭제'`, `파괴적 동작 "삭제"`); the render now uses the real executor/policy helper.
+  Linux tests cover it (`testApprovalCardShowsPlainLanguageNotAXIds`, `testKoreanReasonsAlignWithEnglish`).
 
 ## CI availability
-From commit 5cd52c7 on, GitHub Actions jobs were **not started**: "recent account payments have failed or your spending
-limit needs to be increased" (account billing). Commits 5cd52c7 and later are verified on Linux only (142 tests) until
-Actions billing is restored; then re-run CI to compile them on macOS and re-render the UI/probe.
+Commits 5cd52c7–1ea45e9 (runs 22–23) were not started because of an account billing/spending-limit block. After the
+repository was made public, runs 24, 27 and 28 completed green on Linux and macOS (runs 25–26 were superseded while queued: the
+concurrency group keeps only the newest pending run).

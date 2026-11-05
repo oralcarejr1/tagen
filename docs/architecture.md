@@ -83,6 +83,9 @@ overlays; Keychain for credentials; redaction everywhere text is persisted or lo
   `AXObserver` move/resize/destroy notifications (`AXChangeObserver`), with polling kept at 0.5 s as a safety net.
 - **Codex / Claude Code** — adapters verified against codex-cli 0.166.0's generated schema + live `codex app-server`, and
   against the Claude Agent SDK 0.3.318 types (see `docs/research/codex-claude-protocols.md`).
+- **Localized approvals** — `ApprovalRequest` keeps canonical English (audit/logs) plus optional Korean
+  `ApprovalText`; `ActionPolicy` emits index-aligned ko/en reasons; `ActionExecutor.approvalRequest` names the target in
+  plain language (`AXRoleName`, `GUIAction.summary(_:targetName:)`) instead of element ids or AX roles.
 - **CI artifacts** — `Tagen --render-ui <dir>` renders panel/settings screens; `tagen-live-probe` measures real apps;
   both are published to the `ci-artifacts` branch.
 

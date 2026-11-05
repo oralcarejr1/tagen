@@ -7,9 +7,9 @@ L3 packaged-app smoke on CI, L4 live GUI on a Mac with permissions, L5 physical-
 | Phase | Status | Verified at | Blocked items |
 |---|---|---|---|
 | 0 Foundation | Verified | L1, L2 | — |
-| 1 Screen awareness + selection | Implemented; logic L1/L2; OCR L2; AX selection extraction 5/5 live (fixture) | L1, L2, L4 | Third-party apps, model answers (L5) |
-| 2 Visual guidance | Implemented; geometry/lifecycle L1; overlays render L2; AX anchor error 0 pt live (fixture) | L1, L2, L4 | Multi-monitor/Retina/full-screen visual check (L5) |
-| 3 Voice | Implemented; state machine/controller verified L1 with transcript fixtures | L1, L2 (compile) | Live mic/speech (L5) |
+| 1 Screen awareness + selection | Implemented; logic L1/L2; OCR L2; AX selection extraction 5/5 live (fixture); real TextEdit/Safari/Finder AX + OCR + selection (live probe 13/13) | L1, L2, L4 | Third-party apps, model answers (L5) |
+| 2 Visual guidance | Implemented; geometry/lifecycle L1; overlays render L2; AX anchor error 0 pt live (fixture); 0.5 pt on real TextEdit/Safari; AX-notification anchoring live | L1, L2, L4 | Multi-monitor/Retina/full-screen visual check (L5) |
+| 3 Voice | Implemented; state machine/controller verified L1 with transcript fixtures; TTS ko/en produces audio on CI | L1, L2, L4 (TTS only) | Live mic/speech recognition (L5) |
 | 4 Agent bridge | Implemented; verified against protocol fakes incl. real approval relay | L1, L2 | Real CLIs + auth on the Mac (L5) |
 | 5 Computer use | Verified on the fixture app: live CI run 27/27 safe tasks, 5/5 safety, 0 unauthorized | L1, L2, L4 (fixture) | Third-party apps (L5) |
 | 6 Integration/packaging | App, settings, onboarding, emergency stop, packaging, self-test, docs | L2, L3 (see test-results) | Notarization (needs Developer ID) |

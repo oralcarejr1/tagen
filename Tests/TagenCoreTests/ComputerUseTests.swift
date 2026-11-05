@@ -97,6 +97,8 @@ final class ActionPolicyTests: XCTestCase {
         XCTAssertEqual(KeyCombo.parse("return"), KeyCombo(key: "return"))
         XCTAssertNil(KeyCombo.parse("hyper+x"))
         XCTAssertEqual(KeyCombo(key: "s", modifiers: [.command]).description, "⌘S")
+        XCTAssertEqual(KeyCombo(key: "space", modifiers: [.control, .option]).description, "⌃⌥Space")
+        XCTAssertEqual(KeyCombo(key: "delete", modifiers: [.command]).description, "⌘⌫")
     }
 }
 
