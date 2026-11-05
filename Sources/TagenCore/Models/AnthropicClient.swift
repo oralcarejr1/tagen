@@ -30,10 +30,14 @@ public struct AnthropicClient: ModelClient {
             "model": .string(model),
             "max_tokens": .number(Double(request.maxTokens)),
             "stream": true,
-            "system": .string(request.system),
+            // Frozen system prompt as a block with an explicit breakpoint: a guaranteed cache read point.
+            "system": [["type": "text", "text": .string(request.system), "cache_control": ["type": "ephemeral"]]],
             "messages": .array(request.messages.map(Self.encode)),
         ]
         if let e = request.effort { body["output_config"] = ["effort": .string(e.rawValue)] }
+        // Automatic caching: the API places a breakpoint on the last cacheable block and moves it forward
+        // as the (append-only) conversation grows, so each follow-up reads the previous turns from cache.
+        if request.cacheConversation { body["cache_control"] = ["type": "ephemeral"] }
         if enableRefusalFallback && Self.fallbackModels.contains(model) { body["fallbacks"] = "default" }
         return .object(body)
     }
@@ -144,6 +148,8 @@ public struct AnthropicClient: ModelClient {
                 model = ev.at("message", "model")?.stringValue
                 id = ev.at("message", "id")?.stringValue
                 usage.inputTokens = ev.at("message", "usage", "input_tokens")?.intValue ?? 0
+                usage.cacheReadTokens = ev.at("message", "usage", "cache_read_input_tokens")?.intValue ?? 0
+                usage.cacheWriteTokens = ev.at("message", "usage", "cache_creation_input_tokens")?.intValue ?? 0
             case "content_block_start":
                 guard let i = ev["index"]?.intValue, let b = ev["content_block"]?.objectValue else { return nil }
                 blocks[i] = b

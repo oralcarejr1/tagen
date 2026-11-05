@@ -65,7 +65,8 @@ public final class ModelActionPlanner: ActionPlanner, @unchecked Sendable {
     public func nextStep(goal: String, observation: GUIObservation, history: [StepHistoryItem]) async throws -> PlannedStep {
         let pkg = packager.package(observation.asScreenContext(), question: goal, policy: .never)
         let user = ChatMessage.user(pkg.text + "\n\n" + Self.instruction(goal: goal, history: history))
-        let req = ChatRequest(system: PromptLibrary.systemPrompt, messages: messages.current + [user], maxTokens: 4000, purpose: .computerUse)
+        let req = ChatRequest(system: PromptLibrary.systemPrompt, messages: messages.current + [user], maxTokens: 4000, purpose: .computerUse,
+                              cacheConversation: true)
         var final: ChatResponse?
         for try await ev in models.stream(req) { if case .completed(let r) = ev { final = r } }
         try Task.checkCancellation()

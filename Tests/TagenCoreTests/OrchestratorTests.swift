@@ -29,6 +29,7 @@ final class OrchestratorTests: XCTestCase {
         XCTAssertEqual(r1.system, PromptLibrary.systemPrompt)
         XCTAssertTrue(r1.messages[0].text.contains("[w0.0] Button \"Increment\""))
         XCTAssertEqual(r1.purpose, .screenQuestion)
+        XCTAssertTrue(r1.cacheConversation, "conversational asks enable prompt caching")
 
         let e2 = try await collect(await o.ask("How do I raise it?", mode: .ask))
         XCTAssertTrue(e2.contains(.completed(answer: "Click Increment.")))
@@ -67,6 +68,7 @@ final class OrchestratorTests: XCTestCase {
         let prompt = model.requests.current[0].messages[0].text
         XCTAssertTrue(prompt.contains("<untrusted_content kind=\"selected_text\">"))
         XCTAssertEqual(model.requests.current[0].purpose, .quickAnswer)
+        XCTAssertFalse(model.requests.current[0].cacheConversation, "one-shot selection actions don't write cache")
     }
 
     func testTranslateDirectionKoreanEnglish() {

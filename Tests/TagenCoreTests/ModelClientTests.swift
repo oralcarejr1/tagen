@@ -59,6 +59,29 @@ final class AnthropicClientTests: XCTestCase {
         XCTAssertEqual(img?.at("source", "data")?.stringValue, Data([1, 2, 3]).base64EncodedString())
     }
 
+    func testPromptCachingBreakpoints() async throws {
+        let t = ScriptedTransport([.init(status: 200, lines: SSE.anthropicText(["a"])), .init(status: 200, lines: SSE.anthropicText(["b"]))])
+        let c = AnthropicClient(apiKey: "k", transport: t)
+        var conv = request(); conv.cacheConversation = true
+        _ = try await c.complete(conv, model: "claude-opus-5-5")
+        let b1 = try XCTUnwrap(t.lastBody)
+        XCTAssertEqual(b1["cache_control"], ["type": "ephemeral"], "multi-turn → automatic caching")
+        XCTAssertEqual(b1["system"]?[0]?["cache_control"], ["type": "ephemeral"], "explicit breakpoint after the frozen system prompt")
+        XCTAssertEqual(b1["system"]?[0]?["text"]?.stringValue, "sys")
+        _ = try await c.complete(request(), model: "claude-opus-5-5")
+        XCTAssertNil(t.lastBody?["cache_control"], "one-shot → no automatic cache write")
+        // Breakpoints never exceed the 4-slot limit (1 explicit + 1 automatic).
+        XCTAssertLessThanOrEqual(b1.encoded().components(separatedBy: "cache_control").count - 1, 4)
+    }
+
+    func testCacheUsageParsed() async throws {
+        var lines = SSE.anthropicText(["x"])
+        lines[1] = "data: " + JSONValue.object(["type": "message_start", "message": ["id": "m", "model": "claude-opus-5-5",
+            "usage": ["input_tokens": 12, "cache_read_input_tokens": 3000, "cache_creation_input_tokens": 250]]]).encoded()
+        let r = try await AnthropicClient(apiKey: "k", transport: ScriptedTransport([.init(status: 200, lines: lines)])).complete(request(), model: "m")
+        XCTAssertEqual(r.usage, TokenUsage(inputTokens: 12, outputTokens: 7, cacheReadTokens: 3000, cacheWriteTokens: 250))
+    }
+
     func testFallbackOmittedForOtherModels() async throws {
         let t = ScriptedTransport([.init(status: 200, lines: SSE.anthropicText(["ok"]))])
         _ = try await AnthropicClient(apiKey: "k", transport: t).complete(request(), model: "claude-haiku-5-5")

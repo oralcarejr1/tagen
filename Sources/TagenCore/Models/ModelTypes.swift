@@ -45,11 +45,14 @@ public struct ChatRequest: Sendable, Equatable {
     public var purpose: ModelPurpose
     public var effort: Effort?
     public var timeout: Double
+    /// Multi-turn requests whose history is reused next turn: enables automatic prompt caching of the
+    /// conversation tail. One-shot requests leave it off to avoid paying cache writes nobody reads.
+    public var cacheConversation: Bool
 
     public init(system: String, messages: [ChatMessage], maxTokens: Int = 16000, purpose: ModelPurpose,
-                effort: Effort? = nil, timeout: Double = 120) {
+                effort: Effort? = nil, timeout: Double = 120, cacheConversation: Bool = false) {
         self.system = system; self.messages = messages; self.maxTokens = maxTokens
-        self.purpose = purpose; self.effort = effort; self.timeout = timeout
+        self.purpose = purpose; self.effort = effort; self.timeout = timeout; self.cacheConversation = cacheConversation
     }
 
     public var needsVision: Bool { messages.contains(where: \.hasImage) }
@@ -58,7 +61,12 @@ public struct ChatRequest: Sendable, Equatable {
 public struct TokenUsage: Sendable, Equatable, Codable {
     public var inputTokens: Int
     public var outputTokens: Int
-    public init(inputTokens: Int = 0, outputTokens: Int = 0) { self.inputTokens = inputTokens; self.outputTokens = outputTokens }
+    public var cacheReadTokens: Int
+    public var cacheWriteTokens: Int
+    public init(inputTokens: Int = 0, outputTokens: Int = 0, cacheReadTokens: Int = 0, cacheWriteTokens: Int = 0) {
+        self.inputTokens = inputTokens; self.outputTokens = outputTokens
+        self.cacheReadTokens = cacheReadTokens; self.cacheWriteTokens = cacheWriteTokens
+    }
 }
 
 public struct ChatResponse: Sendable, Equatable {

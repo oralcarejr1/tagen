@@ -180,9 +180,13 @@ public actor AssistantOrchestrator {
         let userMsg = ChatMessage(role: .user, parts: parts)
 
         let request = ChatRequest(system: PromptLibrary.systemPrompt, messages: trimmedHistory() + [userMsg],
-                                  maxTokens: mode == .guide ? 4000 : 16000, purpose: mode == .guide ? .guidance : .screenQuestion)
+                                  maxTokens: mode == .guide ? 4000 : 16000, purpose: mode == .guide ? .guidance : .screenQuestion,
+                                  cacheConversation: true)
         emit(.status("Thinking…"))
         let response = try await streamModel(request, emitDeltas: mode != .guide, emit: emit)
+        if response.usage.cacheReadTokens > 0 || response.usage.cacheWriteTokens > 0 {
+            Log("orchestrator").debug("cache read=\(response.usage.cacheReadTokens) write=\(response.usage.cacheWriteTokens) uncached=\(response.usage.inputTokens)")
+        }
 
         conversation.messages.append(userMsg)
         conversation.messages.append(response.message)
