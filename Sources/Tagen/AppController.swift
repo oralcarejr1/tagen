@@ -278,8 +278,11 @@ final class AppController {
         let settings = state.settings
         let executor = ActionExecutor(driver: guiDriver, policy: ActionPolicy(autoApproveUpTo: settings.computerUseAutoApproveUpTo), approvals: broker)
         let driver = guiDriver
-        let planner = ModelActionPlanner(models: router,
-                                         screenshotProvider: settings.assistant.allowScreenshotsToModel ? { obs in await driver.captureWindow(obs) } : nil)
+        var screenshotProvider: (@Sendable (GUIObservation) async -> CapturedImage?)? = nil
+        if settings.assistant.allowScreenshotsToModel {
+            screenshotProvider = { obs in await driver.captureWindow(obs) }
+        }
+        let planner = ModelActionPlanner(models: router, screenshotProvider: screenshotProvider)
         var cfg = ComputerUseConfig(); cfg.maxSteps = settings.computerUseMaxSteps
         let session = ComputerUseSession(goal: goal, scopeBundleID: scope, planner: planner, executor: executor, config: cfg)
         let broker = self.broker!
