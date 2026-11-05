@@ -66,6 +66,11 @@ jobs:
           set -o pipefail
           swift build --build-tests 2>&1 | tee build-macos.log || { echo "=== COMPILE ERRORS ==="; grep -E "error:" build-macos.log | sort -u | head -150; exit 1; }
       - name: Unit + integration tests
+        # Normally ~15 s. A hung test must fail this step quickly (not the 60-min job limit), and
+        # NSUnbufferedIO makes XCTest flush each line so the log shows which test was running.
+        timeout-minutes: 15
+        env:
+          NSUnbufferedIO: "YES"
         run: |
           set -o pipefail
           mkdir -p test-results

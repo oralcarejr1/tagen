@@ -36,7 +36,12 @@ struct AgentsView: View {
                     }
                     .buttonStyle(.borderedProminent).disabled(prompt.isEmpty || folder.isEmpty)
                     if !state.settings.agentExecutionEnabled {
-                        Text(state.t("Agent execution is disabled in Settings.", "설정에서 에이전트 실행이 꺼져 있습니다.")).font(.caption).foregroundStyle(.orange)
+                        Button { app?.openSettings(tab: .agents) } label: {
+                            Label(state.t("Agents are off · Turn on…", "실행 꺼짐 · 켜기…"), systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .controlSize(.small).fixedSize()
+                        .help(state.t("Agent execution is off. Opens Settings › Agents.", "에이전트 실행이 꺼져 있습니다. 설정 › 에이전트를 엽니다."))
                     }
                 }
                 Divider()
@@ -46,7 +51,7 @@ struct AgentsView: View {
                             statusIcon(t.status)
                             VStack(alignment: .leading) {
                                 Text(t.spec.prompt).lineLimit(1)
-                                Text("\(t.spec.provider.displayName) · \(t.status.rawValue)").font(.caption2).foregroundStyle(.secondary)
+                                Text("\(t.spec.provider.displayName) · \(t.status.displayName(state.lang))").font(.caption2).foregroundStyle(.secondary)
                             }
                         }.tag(t.id)
                     }
@@ -58,7 +63,10 @@ struct AgentsView: View {
                 if let id = state.selectedAgentTask, let t = state.agentTasks[id] {
                     HStack {
                         Text(t.spec.provider.displayName).font(.headline)
-                        Text(t.status.rawValue).font(.caption).padding(3).background(.quaternary, in: Capsule())
+                        Label(t.status.displayName(state.lang), systemImage: t.status.icon)
+                            .font(.caption).foregroundStyle(t.status.color)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(t.status.color.opacity(0.15), in: Capsule())
                         Spacer()
                         if t.status == .running || t.status == .awaitingApproval || t.status == .recovering {
                             Button(state.t("Cancel", "취소"), role: .destructive) { app?.cancelAgent(id) }
@@ -113,17 +121,7 @@ struct AgentsView: View {
     }
 
     func statusIcon(_ s: AgentTaskSnapshot.Status) -> some View {
-        let (n, c): (String, Color) = {
-            switch s {
-            case .running: return ("circle.dotted", .blue)
-            case .awaitingApproval: return ("hand.raised.fill", .orange)
-            case .completed: return ("checkmark.circle.fill", .green)
-            case .failed: return ("xmark.circle.fill", .red)
-            case .cancelled: return ("stop.circle", .secondary)
-            case .recovering: return ("arrow.triangle.2.circlepath", .orange)
-            }
-        }()
-        return Image(systemName: n).foregroundStyle(c)
+        Image(systemName: s.icon).foregroundStyle(s.color).help(s.displayName(state.lang))
     }
 
     func chooseFolder() {
@@ -138,10 +136,44 @@ struct AgentsView: View {
     }
 }
 
+extension AgentTaskSnapshot.Status {
+    func displayName(_ lang: LanguageCode) -> String {
+        let ko = lang == .korean
+        switch self {
+        case .running: return ko ? "실행 중" : "Running"
+        case .awaitingApproval: return ko ? "승인 대기" : "Needs approval"
+        case .completed: return ko ? "완료" : "Done"
+        case .failed: return ko ? "실패" : "Failed"
+        case .cancelled: return ko ? "취소됨" : "Cancelled"
+        case .recovering: return ko ? "복구 중" : "Recovering"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .running: return "circle.dotted"
+        case .awaitingApproval: return "hand.raised.fill"
+        case .completed: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle"
+        case .recovering: return "arrow.triangle.2.circlepath"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .running: return .blue
+        case .awaitingApproval, .recovering: return .orange
+        case .completed: return .green
+        case .failed: return .red
+        case .cancelled: return .secondary
+        }
+    }
+}
+
 struct HistoryView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.appController) var app
     @State private var selected: UUID?
+    @State private var confirmDelete = false
     var body: some View {
         HSplitView {
             List(selection: $selected) {
@@ -166,16 +198,30 @@ struct HistoryView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
                 }
                 HStack {
+                    // Destructive action sits apart from "Continue" and always asks first.
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label(state.t("Delete all…", "모두 삭제…"), systemImage: "trash")
+                    }
+                    .buttonStyle(.borderless).foregroundStyle(.red).disabled(state.history.isEmpty)
+                    .accessibilityIdentifier("deleteAllHistoryButton")
                     Text(state.t("Screenshots and audio are never stored.", "스크린샷과 음성은 저장하지 않습니다.")).font(.caption2).foregroundStyle(.secondary)
                     Spacer()
                     if let id = selected {
                         Button(state.t("Continue this conversation", "이 대화 이어가기")) { app?.continueConversation(id) }
+                            .buttonStyle(.borderedProminent)
                     }
-                    Button(state.t("Delete all history", "모든 기록 삭제"), role: .destructive) { app?.deleteAllHistory() }
                 }.padding(8)
             }
         }
         .onAppear { app?.loadHistory() }
+        .confirmationDialog(state.t("Delete all history?", "모든 기록을 삭제할까요?"), isPresented: $confirmDelete) {
+            Button(state.t("Delete \(state.history.count) conversations", "대화 \(state.history.count)개 삭제"), role: .destructive) {
+                app?.deleteAllHistory(); selected = nil
+            }
+            Button(state.t("Cancel", "취소"), role: .cancel) {}
+        } message: {
+            Text(state.t("This can't be undone.", "삭제하면 되돌릴 수 없습니다."))
+        }
     }
 }
 #endif
