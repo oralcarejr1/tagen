@@ -187,7 +187,8 @@ public enum ActionParser {
 public enum ComputerUseEvent: Sendable {
     case started(goal: String, scope: String?)
     case observing
-    case planned(GUIAction, rationale: String)
+    /// `targetName`: the target element's name in the observation the step was planned on (for display).
+    case planned(GUIAction, rationale: String, targetName: String? = nil)
     case phase(StepPhase, String)
     case stepFinished(StepReport)
     case needsUser(String)
@@ -256,7 +257,7 @@ public struct ComputerUseSession: Sendable {
             case .askUser(let q): emit(.needsUser(q)); return .needsUser(q)
             case .fail(let r): return .failed(r)
             case .action(let a, let why):
-                emit(.planned(a, rationale: why))
+                emit(.planned(a, rationale: why, targetName: a.targetName(in: obs)))
                 let report = await executor.run(a, scopeBundleID: scopeBundleID, previous: obs) { ev in
                     if case .phase(let p, let m) = ev { emit(.phase(p, m)) }
                 }

@@ -46,7 +46,6 @@ enum UIRender {
             c.state.mode = .act
             c.state.input = ko ? "받은편지함의 스팸을 정리해 줘" : "Clean up spam in my inbox"
             c.state.response = ""
-            c.state.actLog = ["▶︎ " + (ko ? "받은편지함 정리" : "Clean inbox") + " [com.apple.mail]", "→ Click [w0.4.2]", "   verify: UI changed after click"]
             // Built by the real executor helper + policy so the screenshot shows what users will see.
             let delBtn = AXElementSnapshot(id: "w0.4.2", role: "AXButton", title: ko ? "삭제" : "Delete", frame: Rect(x: 300, y: 80, width: 60, height: 24))
             let obs = GUIObservation(app: AppInfo(name: "Mail", bundleID: "com.apple.mail", pid: 1),
@@ -54,6 +53,8 @@ enum UIRender {
                                      root: delBtn, layout: MacDisplays.layout())
             let act = GUIAction.click(.element(id: "w0.4.2", observationID: obs.id))
             let assessment = ActionPolicy().assess(act, element: delBtn, observation: obs, scopeBundleID: "com.apple.mail")
+            c.state.actLog = ["▶︎ " + (ko ? "받은편지함 정리" : "Clean inbox") + " [com.apple.mail]",
+                              "→ " + act.summary(c.state.lang, targetName: act.targetName(in: obs))]
             c.state.enqueueApproval(ActionExecutor.approvalRequest(act, element: delBtn, observation: obs, assessment: assessment)) { _ in }
             await settle(); if png(p.contentView!, to: out.appendingPathComponent("panel-act-approval-\(suffix).png")) { written.append("panel-act-approval-\(suffix).png") }
             c.state.approvals = []

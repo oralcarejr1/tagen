@@ -79,6 +79,15 @@ final class ActionPolicyTests: XCTestCase {
         XCTAssertEqual(plain.text(.korean), ApprovalText(title: "T", detail: "D", reasons: []))
     }
 
+    func testActionTargetNameResolvesFromObservation() {
+        let o = obs()
+        let nameField = el("nameField")
+        XCTAssertEqual(GUIAction.click(.element(id: nameField.id, observationID: o.id)).targetName(in: o), nameField.displayName)
+        XCTAssertEqual(GUIAction.click(.query(ElementQuery(identifier: "incrementButton"))).targetName(in: o), el("incrementButton").displayName)
+        XCTAssertNil(GUIAction.click(.element(id: "nope", observationID: o.id)).targetName(in: o))
+        XCTAssertNil(GUIAction.pressKeys(KeyCombo(key: "a")).targetName(in: o))
+    }
+
     func testAXRoleNamesAndLocalizedSummaries() {
         XCTAssertEqual(AXRoleName.friendly("AXPopUpButton", .korean), "팝업 메뉴")
         XCTAssertEqual(AXRoleName.friendly("AXSomethingNew", .english), "somethingnew")

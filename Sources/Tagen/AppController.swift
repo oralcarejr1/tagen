@@ -315,7 +315,7 @@ final class AppController {
                 switch ev {
                 case .started(let g, let s): self.state.actLog.append("▶︎ \(g) [\(s ?? "frontmost")]")
                 case .observing: break
-                case .planned(let a, let why): self.state.actLog.append("→ \(a.summary)" + (why.isEmpty ? "" : " — \(why)"))
+                case .planned(let a, let why, let name): self.state.actLog.append("→ \(a.summary(self.state.lang, targetName: name))" + (why.isEmpty ? "" : " — \(why)"))
                 case .phase(let p, let m): if p == .authorize || p == .verify { self.state.actLog.append("   \(p.rawValue): \(m)") }
                 case .stepFinished(let r): if !r.succeeded { self.state.actLog.append("   ✗ \(r.outcome)") }
                 case .needsUser(let q): self.state.actLog.append("❓ \(q)"); self.state.response = q

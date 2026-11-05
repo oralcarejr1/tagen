@@ -8,7 +8,7 @@
    Developer ID signing + notarization (needs the user's certificate).
 5. **Exact next action** — run the physical-Mac checklist. CI is green and publishes reports + UI screenshots to the
    `ci-artifacts` branch (`runs/<n>-<sha>/`); after each change review `ui/*.png` and `live-probe.log` there.
-6. **Latest test results** — Linux 151 tests ✔. macOS CI run 28 (8d956ac): build/tests/package/self-test ✔, live GUI
+6. **Latest test results** — Linux 152 tests ✔. macOS CI run 28 (8d956ac): build/tests/package/self-test ✔, live GUI
    27/27 safe, 5/5 safety, 0 unauthorized, anchor 0 pt, selection 5/5; live probe 13/13 (TextEdit/Safari/Finder/TTS,
    overlay alignment 0.5 pt, AX notifications ✔). Details: `docs/test-results.md`.
 7. **Commands** — `scripts/linux/test.sh` (Docker image `tagen-linux` from `scripts/linux/Dockerfile`);

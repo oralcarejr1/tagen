@@ -119,6 +119,16 @@ public enum AXRoleName {
 }
 
 extension GUIAction {
+    /// Name of the element this action targets in `observation`, if it resolves uniquely.
+    public func targetName(in observation: GUIObservation) -> String? {
+        guard let t = target, let root = observation.root else { return nil }
+        switch t {
+        case .element(let id, _): return root.flattened().first { $0.id == id }?.displayName
+        case .query(let q): if case .found(let e) = q.resolve(in: root) { return e.displayName }; return nil
+        case .point: return nil
+        }
+    }
+
     /// User-facing summary for approval cards. `targetName` (the resolved element's name) replaces opaque
     /// element ids such as `[w0.4.2]`, which mean nothing to the user.
     public func summary(_ lang: LanguageCode, targetName: String?) -> String {

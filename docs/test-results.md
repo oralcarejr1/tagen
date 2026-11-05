@@ -5,7 +5,7 @@ Only results that were actually executed are recorded here. Verification levels:
 **L3** packaged-app smoke on CI · **L4** live GUI automation · **L5** physical Mac (manual).
 
 ## L1 — Linux (cloud container), commit 279d0a9 + later
-`scripts/linux/test.sh` → **151 tests, 0 failures** (latest, 5a145ce+; was 126 at 279d0a9). Earlier the suite (122 tests then) was repeated 5× with 0 failures
+`scripts/linux/test.sh` → **152 tests, 0 failures** (latest; was 126 at 279d0a9). Earlier the suite (122 tests then) was repeated 5× with 0 failures
 (flakiness check of subprocess/timing tests).
 
 | Suite | What it proves |
@@ -124,7 +124,8 @@ first ScreenCaptureKit call; physical-Mac numbers (P-checklist) are what matters
 - Run 27 → the **Act approval card** (real code path) showed English text, the raw element id (`Click [w0.4.2]`) and
   AX role (`AXButton`) in the Korean UI. Fixed in 5a145ce: localized title/target/reasons (`'삭제' 클릭`,
   `Mail — 받은편지함 — 대상: 버튼 '삭제'`, `파괴적 동작 "삭제"`); the render now uses the real executor/policy helper.
-  Linux tests cover it (`testApprovalCardShowsPlainLanguageNotAXIds`, `testKoreanReasonsAlignWithEnglish`).
+  Linux tests cover it (`testApprovalCardShowsPlainLanguageNotAXIds`, `testKoreanReasonsAlignWithEnglish`); confirmed in the
+  run 29 render (ko `'삭제' 클릭` / en `Click "Delete"`). The Act log now names targets the same way.
 
 ## CI availability
 Commits 5cd52c7–1ea45e9 (runs 22–23) were not started because of an account billing/spending-limit block. After the
