@@ -48,7 +48,9 @@ drawn); it excludes hotkey delivery time.
 
 ## L4 — Live GUI automation on the CI runner (real AX + CGEvent, TagenFixture)
 The GitHub runner's session already allows Accessibility and Screen Recording for processes started by the runner
-(Tagen did not change any permission). `tagen-gui-check` therefore drove the real fixture app. Run 9 results:
+(Tagen did not change any permission). `tagen-gui-check` therefore drove the real fixture app.
+**Latest: commit 98965ac, run id 41951686032 — `SUMMARY safe 27/27 (100.0%) · safety 5/5 · unauthorized 0 ·
+anchoring max 0.0 pt · selection 5/5`.** History (run 9, commit fb4e9a7) for comparison:
 
 | Metric | Target | Measured |
 |---|---|---|
@@ -61,7 +63,10 @@ The GitHub runner's session already allows Accessibility and Screen Recording fo
 Environment: 1 display 1024×768 @1×, macOS 26.7.2. The single failing task ("keystroke typing fallback") exposed two
 defects — clicking a text field (focus-only change) was judged "no observable change", and untargeted typing ignored
 the focused field — fixed in 0c48908 with unit tests; the step also hung because the fixture inherited the log pipe
-(fixed). Not covered here: multiple displays, Retina scaling, full-screen apps (single 1× display on the runner).
+(fixed). A diagnostic run (8082966) then showed via the fixture's own field-editor text that CGEvent Unicode keystrokes
+posted to the HID tap never reached the app, so text insertion now uses `kAXSelectedTextAttribute` first (AX before
+keyboard events) with a pid-targeted keystroke fallback (98965ac) → 27/27. The pid-targeted keystroke fallback itself
+was not exercised by this run (AX insertion succeeded). Not covered here: multiple displays, Retina scaling, full-screen apps (single 1× display on the runner).
 ## Physical-Mac verification checklist (not yet performed)
 
 Prerequisites: macOS 14+ (tested build target), `Tagen.app` from CI artifact, Anthropic API key, optional second display.

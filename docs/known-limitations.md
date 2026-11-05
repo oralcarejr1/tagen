@@ -4,7 +4,9 @@
 - Developed in a Linux cloud container without macOS, Xcode, a GUI, microphone, or the user's Mac. macOS code is
   compiled and unit-tested on GitHub `macos-26` runners. CI runners do not grant Accessibility, Screen Recording,
   Microphone or Speech permissions, so live AX automation, capture, overlays-over-real-apps and voice have **not** been
-  exercised end-to-end; `tagen-gui-check` reports `blocked` there by design (Tagen never edits TCC, also not in CI).
+  exercised against third-party apps. (GitHub's `macos-26` runner session happens to allow Accessibility/Screen
+  Recording for runner-launched processes, so the fixture-app live check *did* run there — see test-results. Tagen never
+  edits TCC; elsewhere `tagen-gui-check` reports `blocked` instead of simulating.)
 - REA could not inspect HeyClicky: no binary available and `www.heyclicky.com` is blocked by the session network policy.
 - Real `claude` / `codex` CLIs were never executed (by design, to avoid recursive Claude Code launches); protocol
   behaviour is verified against deterministic fakes. Exact field names must be confirmed on the Mac:
@@ -25,6 +27,9 @@
   animations may lag one frame. Screenshot-box annotations are dropped when their window resizes (coordinates stale).
 - Guide/Act quality depends on the model; all model output is validated, but the planner can still choose wrong
   (valid) actions — risky ones always require approval.
+- Live CI showed CGEvent Unicode keystrokes posted to the HID event tap did not reach the fixture app; Tagen therefore
+  inserts text via AX (`AXValue` / `AXSelectedText`). The remaining keystroke fallback (secure fields, apps without AX
+  text support) now posts to the target pid but has not been verified live.
 - `secondsSinceUserInput` uses HID idle time and excludes Tagen's own events heuristically (timing-based).
 - Push-to-talk hotkey uses Carbon hotkeys (press/release); if another app owns the same combination registration fails
   and the panel shows a warning. Hotkeys are not yet user-configurable (defaults in Settings › General).
