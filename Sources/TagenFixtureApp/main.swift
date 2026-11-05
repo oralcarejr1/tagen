@@ -6,7 +6,7 @@ import AppKit
 // true on-screen frames of its controls (global, top-left origin) as JSON after layout.
 
 @MainActor
-final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTextFieldDelegate {
     var window: NSWindow!
     let countLabel = NSTextField(labelWithString: "Count: 0")
     let greetingLabel = NSTextField(labelWithString: "Greeting: (none)")
@@ -32,6 +32,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
     func windowDidMove(_ n: Notification) { writeTruth() }
     func windowDidResize(_ n: Notification) { writeTruth() }
+    func controlTextDidChange(_ n: Notification) { writeTruth() }
 
     func buildMenu() {
         let main = NSMenu()
@@ -71,6 +72,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         statusLabel.setAccessibilityIdentifier("statusLabel")
         nameField.setAccessibilityIdentifier("nameField")
         nameField.placeholderString = "Name"
+        nameField.delegate = self
         checkbox.setAccessibilityIdentifier("featureCheckbox")
         checkbox.target = self; checkbox.action = #selector(toggled)
 
@@ -132,7 +134,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
     func writeTruth() {
         guard let path = truthPath, let screen = NSScreen.screens.first else { return }
         let ph = screen.frame.height
-        var out: [String: [String: Double]] = [:]
+        var out: [String: Any] = [:]
         let views: [(String, NSView)] = [("incrementButton", incButton), ("countLabel", countLabel),
                                          ("nameField", nameField), ("greetingLabel", greetingLabel), ("featureCheckbox", checkbox),
                                          ("statusLabel", statusLabel), ("rowsScroll", rowsScroll)]
@@ -143,6 +145,8 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         }
         out["_window"] = ["x": window.frame.minX, "y": ph - window.frame.maxY, "width": window.frame.width, "height": window.frame.height]
         out["_state"] = ["count": Double(count), "checkbox": checkbox.state == .on ? 1 : 0]
+        // Live editor text (includes uncommitted field-editor input) for diagnosing typing.
+        out["_text"] = ["nameField": (nameField.currentEditor()?.string ?? nameField.stringValue)]
         if let d = try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys]) { try? d.write(to: URL(fileURLWithPath: path)) }
     }
 }

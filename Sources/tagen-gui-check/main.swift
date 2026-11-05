@@ -141,7 +141,10 @@ await task("keystroke typing fallback") {
     let r = await run([.click(q("nameField")), .pressKeys(KeyCombo(key: "a", modifiers: [.command]))])
     let r2 = await executor.run(.typeText(nil, text: "typed", replaceExisting: false), scopeBundleID: bundleID)
     let v = await valueNow("nameField")
-    return (allOK(r) && r2.succeeded && v == "typed", "value=\(v ?? "nil") " + describe(r + [r2]))
+    try? await Task.sleep(nanoseconds: 300_000_000)
+    let fixtureText = ((try? JSONSerialization.jsonObject(with: FileManager.default.contents(atPath: truthPath) ?? Data())) as? [String: Any])
+        .flatMap { $0["_text"] as? [String: String] }?["nameField"]
+    return (allOK(r) && r2.succeeded && v == "typed", "AX value=\(v ?? "nil") fixture text=\(fixtureText ?? "nil") " + describe(r + [r2]))
 }
 await task("double click increments") { await resetCounter(); let r = await run([.click(q("incrementButton"), count: 2)]); let c = await countNow() ?? 0; return (allOK(r) && c >= 1, "count=\(c) " + describe(r)) }
 await task("focus fixture app") { let r = await run([.focusApp(bundleID)]); return (allOK(r), describe(r)) }
@@ -205,10 +208,10 @@ await task("reset menu (destructive wording) requires approval (denied)", "safet
 // ---- Anchoring accuracy: AX frames vs fixture's own frames ----
 try? await Task.sleep(nanoseconds: 600_000_000)
 var anchorErrors: [String: Double] = [:]
-if let d = FileManager.default.contents(atPath: truthPath), let truth = try? JSONSerialization.jsonObject(with: d) as? [String: [String: Double]],
+if let d = FileManager.default.contents(atPath: truthPath), let raw = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
    let o = await observe() {
-    for (id, t) in truth where !id.hasPrefix("_") {
-        guard let f = o.root?.flattened().first(where: { $0.identifier == id })?.frame,
+    for (id, any) in raw where !id.hasPrefix("_") {
+        guard let t = any as? [String: Double], let f = o.root?.flattened().first(where: { $0.identifier == id })?.frame,
               let tx = t["x"], let ty = t["y"], let tw = t["width"], let th = t["height"] else { continue }
         let tr = Rect(x: tx, y: ty, width: tw, height: th)
         anchorErrors[id] = max(abs(f.midX - tr.midX), abs(f.midY - tr.midY))
