@@ -1,0 +1,51 @@
+{
+  "app" : "Tagen",
+  "checks" : [
+    {
+      "detail" : "sqlite ok, redaction ok",
+      "name" : "persistence",
+      "status" : "pass"
+    },
+    {
+      "detail" : "ok",
+      "name" : "settings round-trip",
+      "status" : "pass"
+    },
+    {
+      "detail" : "screenQuestion → claude-opus-5-5",
+      "name" : "model router",
+      "status" : "pass"
+    },
+    {
+      "detail" : "1 {0, 0, 1024×768} @1.0x",
+      "name" : "display layout",
+      "status" : "pass"
+    },
+    {
+      "detail" : "screenCapture=granted, accessibility=granted, microphone=granted, speechRecognition=notDetermined, fileAccess=denied, appAutomation=unknown, agentExecution=denied",
+      "name" : "permissions (report only)",
+      "status" : "pass"
+    },
+    {
+      "detail" : "codex=not found, claude=not found",
+      "name" : "agent CLI discovery (report only)",
+      "status" : "pass"
+    },
+    {
+      "detail" : "\/Users\/runner\/work\/tagen\/tagen\/dist\/Tagen.app\/Contents\/MacOS\/tagen-approval-mcp",
+      "name" : "approval relay helper bundled",
+      "status" : "pass"
+    },
+    {
+      "detail" : "rendered in 70.6 ms",
+      "name" : "overlay render",
+      "status" : "pass"
+    },
+    {
+      "detail" : "median 1.1 ms, first 750.7 ms, max 750.7 ms (n=21, target <250 ms)",
+      "name" : "assistant panel open latency",
+      "status" : "pass"
+    }
+  ],
+  "result" : "pass"
+}
