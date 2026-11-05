@@ -6,7 +6,7 @@
 3. **Completed** — all modules, app UI, fixture + live checker, CI (Linux + macOS 26), packaging, docs.
 4. **Pending** — keep macOS CI green through package/smoke steps; record results in `docs/test-results.md`;
    physical-Mac checklist (P1–P18 in test-results) cannot be done from the cloud.
-5. **Exact next action** — inspect the latest CI run on `claude/youthful-wright-2y3ulz`
+5. **Exact next action** — inspect the latest CI run on `feature/tagen-macos-assistant`
    (GitHub Actions → CI); if green, download artifacts and update `docs/test-results.md`.
 6. **Latest test results** — Linux: 126 tests pass (5/5 repeated runs earlier at 122). macOS CI run 6: 130 tests,
    1 failure (rounding bug, fixed in 279d0a9).
