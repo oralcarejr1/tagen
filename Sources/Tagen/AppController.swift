@@ -277,7 +277,9 @@ final class AppController {
         let scope = target?.bundleIdentifier
         let settings = state.settings
         let executor = ActionExecutor(driver: guiDriver, policy: ActionPolicy(autoApproveUpTo: settings.computerUseAutoApproveUpTo), approvals: broker)
-        let planner = ModelActionPlanner(models: router)
+        let driver = guiDriver
+        let planner = ModelActionPlanner(models: router,
+                                         screenshotProvider: settings.assistant.allowScreenshotsToModel ? { obs in await driver.captureWindow(obs) } : nil)
         var cfg = ComputerUseConfig(); cfg.maxSteps = settings.computerUseMaxSteps
         let session = ComputerUseSession(goal: goal, scopeBundleID: scope, planner: planner, executor: executor, config: cfg)
         let broker = self.broker!

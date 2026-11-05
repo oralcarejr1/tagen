@@ -120,6 +120,11 @@ public final class MacGUIDriver: GUIDriver, @unchecked Sendable {
         }
     }
 
+    public func captureWindow(_ observation: GUIObservation) async -> CapturedImage? {
+        guard let pid = observation.app?.pid, let w = observation.window, ScreenCapturer.hasPermission else { return nil }
+        return try? await ScreenCapturer().captureWindow(pid: pid, frame: w.frame, title: w.title)
+    }
+
     public func secondsSinceUserInput() async -> Double? {
         let any = CGEventType(rawValue: ~0)!
         let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: any)

@@ -13,6 +13,12 @@ public struct ContextPackager: Sendable {
         public var sufficientTextVolume: Int = 200
         public var redactSecrets: Bool = true
         public init() {}
+
+        /// Compact budget for per-step Act planning (sent every step).
+        public static var planner: Options {
+            var o = Options(); o.maxElements = 250; o.maxCharacters = 12_000; o.maxValueLength = 120
+            return o
+        }
     }
 
     public struct Package: Sendable, Equatable {

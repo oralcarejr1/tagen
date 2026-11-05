@@ -3,6 +3,8 @@ import Foundation
 /// What the planner decided to do next.
 public enum PlannedStep: Sendable, Equatable {
     case action(GUIAction, rationale: String)
+    /// Planner-internal: the model wants a screenshot before deciding.
+    case requestScreenshot
     case done(summary: String)
     case askUser(question: String)
     case fail(reason: String)
@@ -30,61 +32,109 @@ public final class ScriptedPlanner: ActionPlanner, @unchecked Sendable {
     }
 }
 
-/// Model-backed planner. Keeps one append-only conversation per task.
+/// Model-backed planner. Keeps one append-only conversation per task. Sends a compact accessibility
+/// tree plus a diff against the previous step, and attaches a screenshot when accessibility text is thin
+/// or when the model asks for one (`{"type":"screenshot"}`).
 public final class ModelActionPlanner: ActionPlanner, @unchecked Sendable {
     let models: ModelStreaming
     let packager: ContextPackager
+    let screenshotProvider: (@Sendable (GUIObservation) async -> CapturedImage?)?
+    let maxScreenshotRequestsPerStep: Int
     private let messages = Locked<[ChatMessage]>([])
+    private let previous = Locked<GUIObservation?>(nil)
+    /// Geometry of the screenshot most recently sent, for converting `image_point` targets.
+    private let lastImage = Locked<CaptureGeometry?>(nil)
 
-    public init(models: ModelStreaming, packager: ContextPackager = ContextPackager()) {
-        self.models = models; self.packager = packager
+    public init(models: ModelStreaming, packager: ContextPackager = ContextPackager(options: .planner),
+                screenshotProvider: (@Sendable (GUIObservation) async -> CapturedImage?)? = nil, maxScreenshotRequestsPerStep: Int = 1) {
+        self.models = models; self.packager = packager; self.screenshotProvider = screenshotProvider
+        self.maxScreenshotRequestsPerStep = maxScreenshotRequestsPerStep
     }
 
-    static func instruction(goal: String, history: [StepHistoryItem]) -> String {
+    static func instruction(goal: String, history: [StepHistoryItem], changes: [String], hasImage: Bool) -> String {
         let last = history.last.map { "Result of your previous action (\($0.action.summary)): \($0.succeeded ? "OK" : "FAILED") — \($0.result)\n" } ?? ""
+        let diff = changes.isEmpty ? "" : "Changes since the previous step:\n" + changes.map { "  - " + $0 }.joined(separator: "\n") + "\n"
+        let image = hasImage ? "A screenshot of the window is attached; use \"image_point\": [x, y] (screenshot pixels) only for targets missing from the tree.\n" : ""
         return """
-        \(last)Mode: ACT. Goal from the user: \(goal)
+        \(last)\(diff)\(image)Mode: ACT. Goal from the user: \(goal)
         Propose exactly ONE next action as JSON only (no prose outside JSON). Schema:
         {"rationale": "<one sentence>", "action": {"type": "click", "element_id": "<id>"} }
         Action types:
-          click {element_id | point:[x,y], button?: "left"|"right", count?: 1|2}
+          click {element_id | image_point:[x,y], button?: "left"|"right", count?: 1|2}
           type {element_id?, text, replace?: true, submit?: false}
           keys {combo: "cmd+s"}
           menu {path: ["File", "Save…"]}
           scroll {element_id?, direction: "up"|"down"|"left"|"right", amount?: 3}
           focus_app {app: "<bundle id or name>"}
           wait {condition: {"element_exists": {"title": "…"}} | {"window_title_contains": "…"}, timeout?: 5}
+          screenshot {}             — you need to see the window (canvas/graphics/unlabeled controls)
           done {summary}            — the goal is complete (verified in the current screen)
           ask_user {question}       — you need information or a decision from the user
           fail {reason}             — the goal cannot be completed safely
-        Use element ids from the CURRENT tree only. Prefer element_id over point. Do not repeat an action that failed \
-        without changing something. Never enter passwords or payment data.
+        Use element ids from the CURRENT tree only. Prefer element_id over image_point. Do not repeat an action that \
+        failed without changing something. Never enter passwords or payment data.
         """
     }
 
+    /// Thin accessibility → attach a screenshot up front.
+    static func needsScreenshot(_ obs: GUIObservation, packager: ContextPackager) -> Bool {
+        let ctx = obs.asScreenContext()
+        if ctx.axRoot == nil { return true }
+        if let b = obs.app?.bundleID, ContextPackager.canvasApps.contains(b) { return true }
+        let interactive = obs.root?.flattened().filter(\.isInteractive).count ?? 0
+        return ctx.accessibilityTextVolume < packager.options.sufficientTextVolume || interactive < 2
+    }
+
     public func nextStep(goal: String, observation: GUIObservation, history: [StepHistoryItem]) async throws -> PlannedStep {
-        let pkg = packager.package(observation.asScreenContext(), question: goal, policy: .never)
-        let user = ChatMessage.user(pkg.text + "\n\n" + Self.instruction(goal: goal, history: history))
-        let req = ChatRequest(system: PromptLibrary.systemPrompt, messages: messages.current + [user], maxTokens: 4000, purpose: .computerUse,
-                              cacheConversation: true)
-        var final: ChatResponse?
-        for try await ev in models.stream(req) { if case .completed(let r) = ev { final = r } }
-        try Task.checkCancellation()
-        guard let r = final else { throw ModelError.decoding("planner: no response") }
-        messages.withLock { $0.append(user); $0.append(r.message) }
-        return ActionParser.parse(r.text, observation: observation)
+        let changes = previous.current.map { ObservationDiff.lines(from: $0, to: observation) } ?? []
+        previous.set(observation)
+        var image: CapturedImage?
+        if Self.needsScreenshot(observation, packager: packager) { image = await screenshotProvider?(observation) }
+        var requests = 0
+        while true {
+            let pkg = packager.package(observation.asScreenContext(), question: goal, policy: .never)
+            var parts: [ContentPart] = []
+            if let img = image { parts.append(.image(data: img.data, mediaType: img.mediaType)) }
+            parts.append(.text(pkg.text + "\n\n" + Self.instruction(goal: goal, history: requests == 0 ? history : [], changes: requests == 0 ? changes : [],
+                                                                     hasImage: image != nil)))
+            let user = ChatMessage(role: .user, parts: parts)
+            let req = ChatRequest(system: PromptLibrary.systemPrompt, messages: messages.current + [user], maxTokens: 4000, purpose: .computerUse,
+                                  cacheConversation: true)
+            var final: ChatResponse?
+            for try await ev in models.stream(req) { if case .completed(let r) = ev { final = r } }
+            try Task.checkCancellation()
+            guard let r = final else { throw ModelError.decoding("planner: no response") }
+            messages.withLock { $0.append(user); $0.append(r.message) }
+            if image != nil { lastImage.set(image?.geometry) }
+            let step = ActionParser.parse(r.text, observation: observation, imageGeometry: lastImage.current)
+            if case .requestScreenshot = step {
+                requests += 1
+                guard image == nil, requests <= maxScreenshotRequestsPerStep, let provider = screenshotProvider,
+                      let shot = await provider(observation) else {
+                    return .fail(reason: "a screenshot was requested but is unavailable (Screen Recording permission?)")
+                }
+                image = shot
+                continue
+            }
+            return step
+        }
     }
 }
 
 public enum ActionParser {
     /// Parse planner JSON into a typed step. Any malformed output becomes `.fail` (never a guess).
-    public static func parse(_ text: String, observation: GUIObservation) -> PlannedStep {
+    public static func parse(_ text: String, observation: GUIObservation, imageGeometry: CaptureGeometry? = nil) -> PlannedStep {
         guard let json = GuideParser.extractJSONObject(text) else { return .fail(reason: "planner returned no JSON") }
         let rationale = json["rationale"]?.stringValue ?? ""
         let a = json["action"] ?? json
         guard let type = a["type"]?.stringValue else { return .fail(reason: "action has no type") }
         func target() -> ElementTarget? {
             if let id = a["element_id"]?.stringValue, !id.isEmpty { return .element(id: id, observationID: observation.id) }
+            if let p = a["image_point"]?.arrayValue?.compactMap(\.doubleValue), p.count == 2, let g = imageGeometry {
+                let r = Rect(origin: .zero, size: g.imageSize)
+                guard r.contains(Point(x: p[0], y: p[1])) else { return nil }
+                return .point(g.globalPoint(fromImagePixel: Point(x: p[0], y: p[1])), observationID: observation.id)
+            }
             if let p = a["point"]?.arrayValue?.compactMap(\.doubleValue), p.count == 2 { return .point(Point(x: p[0], y: p[1]), observationID: observation.id) }
             if let q = a["query"], let query = try? q.decode(ElementQuery.self) { return .query(query) }
             return nil
@@ -116,6 +166,7 @@ public enum ActionParser {
             if let q = c?["element_gone"], let query = try? q.decode(ElementQuery.self) { return .action(.wait(.elementGone(query), timeout: to), rationale: rationale) }
             if let t = c?["window_title_contains"]?.stringValue { return .action(.wait(.windowTitleContains(t), timeout: to), rationale: rationale) }
             return .fail(reason: "invalid wait condition")
+        case "screenshot": return .requestScreenshot
         case "done": return .done(summary: a["summary"]?.stringValue ?? rationale)
         case "ask_user": return .askUser(question: a["question"]?.stringValue ?? rationale)
         case "fail": return .fail(reason: a["reason"]?.stringValue ?? rationale)
@@ -186,6 +237,7 @@ public struct ComputerUseSession: Sendable {
             do { step = try await planner.nextStep(goal: goal, observation: obs, history: history) }
             catch { return .failed("planner error: \(error)") }
             switch step {
+            case .requestScreenshot: return .failed("planner requested a screenshot it could not get")
             case .done(let s): return .finished(summary: s)
             case .askUser(let q): emit(.needsUser(q)); return .needsUser(q)
             case .fail(let r): return .failed(r)

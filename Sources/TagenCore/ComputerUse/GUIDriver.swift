@@ -72,4 +72,44 @@ public protocol GUIDriver: Sendable {
     func perform(_ primitive: GUIPrimitive) async throws
     /// Seconds since the last *physical* user input, if the platform can tell.
     func secondsSinceUserInput() async -> Double?
+    /// Screenshot of the observed window (for planners on apps with little accessibility text).
+    func captureWindow(_ observation: GUIObservation) async -> CapturedImage?
+}
+
+extension GUIDriver {
+    public func captureWindow(_ observation: GUIObservation) async -> CapturedImage? { nil }
+}
+
+/// Human-readable differences between two observations (helps the planner verify its last step).
+public enum ObservationDiff {
+    public static func lines(from old: GUIObservation, to new: GUIObservation, limit: Int = 15) -> [String] {
+        var out: [String] = []
+        if old.app?.bundleID != new.app?.bundleID { out.append("frontmost app: \(old.app?.name ?? "?") → \(new.app?.name ?? "?")") }
+        if old.window?.title != new.window?.title { out.append("window title: \"\(old.window?.title ?? "")\" → \"\(new.window?.title ?? "")\"") }
+        guard let o = old.root, let n = new.root else { return out }
+        func key(_ e: AXElementSnapshot) -> String? {
+            if let i = e.identifier, !i.isEmpty { return "\(e.role)#\(i)" }
+            if let t = e.title, !t.isEmpty { return "\(e.role)|\(t)" }
+            return nil
+        }
+        var before: [String: AXElementSnapshot] = [:]
+        for e in o.flattened() { if let k = key(e), before[k] == nil { before[k] = e } }
+        var seen = Set<String>()
+        for e in n.flattened() {
+            guard let k = key(e), seen.insert(k).inserted else { continue }
+            if let b = before[k] {
+                if b.value != e.value && !e.isSecure { out.append("[\(e.id)] \(e.displayName ?? k) value: \"\(b.value?.prefix(60) ?? "")\" → \"\(e.value?.prefix(60) ?? "")\"") }
+                if b.isEnabled != e.isEnabled { out.append("[\(e.id)] \(e.displayName ?? k) \(e.isEnabled ? "enabled" : "disabled")") }
+                if b.isFocused != e.isFocused && e.isFocused { out.append("[\(e.id)] \(e.displayName ?? k) focused") }
+            } else {
+                out.append("appeared: [\(e.id)] \(e.role.replacingOccurrences(of: "AX", with: "")) \(e.displayName ?? "")")
+            }
+            if out.count >= limit { break }
+        }
+        let after = Set(n.flattened().compactMap(key))
+        for (k, e) in before where !after.contains(k) && out.count < limit {
+            out.append("disappeared: \(e.role.replacingOccurrences(of: "AX", with: "")) \(e.displayName ?? k)")
+        }
+        return out
+    }
 }

@@ -265,6 +265,61 @@ final class ComputerUseSessionTests: XCTestCase {
         XCTAssertTrue(m2.contains("step limit"))
     }
 
+    func testPlannerAttachesScreenshotForThinAccessibilityAndConvertsImagePoints() async throws {
+        let shot = CapturedImage(data: Data([1]), mediaType: "image/jpeg",
+                                 geometry: CaptureGeometry(captureRect: Rect(x: 100, y: 100, width: 400, height: 300), imageSize: Size(width: 800, height: 600)))
+        let model = ScriptedModel([#"{"action":{"type":"click","image_point":[400,300]}}"#])
+        let planner = ModelActionPlanner(models: model, screenshotProvider: { _ in shot })
+        let thin = GUIObservation(app: AppInfo(name: "Canvas", bundleID: "com.figma.Desktop", pid: 9), window: WindowInfo(title: "c", frame: shot.geometry.captureRect),
+                                  root: AXElementSnapshot(id: "w0", role: "AXWindow"), layout: Fixtures.layout)
+        let step = try await planner.nextStep(goal: "click the center", observation: thin, history: [])
+        XCTAssertTrue(model.requests.current[0].messages.last!.hasImage)
+        guard case .action(.click(.point(let p, let oid), _, _), _) = step else { return XCTFail("\(step)") }
+        XCTAssertEqual(p, Point(x: 300, y: 250), "screenshot pixel (400,300) at 2x → global center of the window")
+        XCTAssertEqual(oid, thin.id)
+    }
+
+    func testPlannerFetchesScreenshotOnRequestAndSkipsForRichAX() async throws {
+        let shot = CapturedImage(data: Data([1]), mediaType: "image/jpeg", geometry: CaptureGeometry(captureRect: Rect(x: 0, y: 0, width: 10, height: 10), imageSize: Size(width: 10, height: 10)))
+        let calls = Locked(0)
+        let model = ScriptedModel([#"{"action":{"type":"screenshot"}}"#, #"{"action":{"type":"done","summary":"seen"}}"#])
+        let planner = ModelActionPlanner(models: model, screenshotProvider: { _ in calls.withLock { $0 += 1 }; return shot })
+        var root = Fixtures.fixtureTree()
+        root.children.append(AXElementSnapshot(id: "w0.9", role: "AXStaticText", value: String(repeating: "rich text ", count: 40)))
+        let obs = GUIObservation(app: AppInfo(name: "F", bundleID: "dev.tagen.Fixture", pid: 1), window: nil, root: root, layout: Fixtures.layout)
+        let step = try await planner.nextStep(goal: "g", observation: obs, history: [])
+        XCTAssertEqual(step, .done(summary: "seen"))
+        XCTAssertFalse(model.requests.current[0].messages.last!.hasImage, "rich AX → no screenshot up front")
+        XCTAssertTrue(model.requests.current[1].messages.last!.hasImage, "model asked → screenshot attached")
+        XCTAssertEqual(model.requests.current[1].messages.count, 3, "append-only: request, reply, new request")
+        XCTAssertEqual(calls.current, 1)
+        // Without a provider (permission/setting off) the request fails safely instead of guessing.
+        let noShot = ModelActionPlanner(models: ScriptedModel([#"{"action":{"type":"screenshot"}}"#]))
+        let s2 = try await noShot.nextStep(goal: "g", observation: obs, history: [])
+        if case .fail = s2 {} else { XCTFail("\(s2)") }
+    }
+
+    func testPlannerSendsDiffSinceLastStep() async throws {
+        let d = SimulatedGUIDriver()
+        let model = ScriptedModel([#"{"action":{"type":"click","element_id":"w0.0"}}"#, #"{"action":{"type":"done","summary":"ok"}}"#])
+        let planner = ModelActionPlanner(models: model)
+        let o1 = try await d.observe(scopeBundleID: nil)
+        _ = try await planner.nextStep(goal: "g", observation: o1, history: [])
+        d.state.withLock { $0.count = 1 }
+        let o2 = try await d.observe(scopeBundleID: nil)
+        _ = try await planner.nextStep(goal: "g", observation: o2, history: [StepHistoryItem(action: .click(.element(id: "w0.0", observationID: o1.id)), result: "UI changed", succeeded: true)])
+        let text = model.requests.current[1].messages.last!.text
+        XCTAssertTrue(text.contains("Changes since the previous step"))
+        XCTAssertTrue(text.contains("\"Count: 0\" → \"Count: 1\""), text)
+    }
+
+    func testImagePointOutsideScreenshotRejected() {
+        let o = GUIObservation(app: nil, window: nil, root: nil, layout: Fixtures.layout)
+        let g = CaptureGeometry(captureRect: Rect(x: 0, y: 0, width: 100, height: 100), imageSize: Size(width: 200, height: 200))
+        if case .fail = ActionParser.parse(#"{"action":{"type":"click","image_point":[500,10]}}"#, observation: o, imageGeometry: g) {} else { XCTFail() }
+        if case .fail = ActionParser.parse(#"{"action":{"type":"click","image_point":[5,10]}}"#, observation: o) {} else { XCTFail("no screenshot sent → no image points") }
+    }
+
     func testActionParser() {
         let o = GUIObservation(app: nil, window: nil, root: nil, layout: Fixtures.layout)
         XCTAssertEqual(ActionParser.parse(#"{"action":{"type":"keys","combo":"cmd+s"}}"#, observation: o), .action(.pressKeys(KeyCombo(key: "s", modifiers: [.command])), rationale: ""))
