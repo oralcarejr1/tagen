@@ -67,8 +67,8 @@ enum UIRender {
             c.state.tab = .assistant
             p.orderOut(nil)
 
-            // 5. Settings: permissions + models
-            for tab in [SettingsTab.permissions, .models, .computerUse] {
+            // 5. Settings: general (shortcuts editor), permissions, models, voice, computer use
+            for tab in [SettingsTab.general, .permissions, .models, .voice, .computerUse] {
                 c.openSettings(tab: tab)
                 await settle()
                 if let v = c.settingsWindow?.contentView, png(v, to: out.appendingPathComponent("settings-\(tab.rawValue)-\(suffix).png")) {

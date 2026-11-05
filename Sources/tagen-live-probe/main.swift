@@ -75,12 +75,19 @@ while let a = it.next() { if a == "--output" { outputPath = it.next() ?? outputP
 
         // Full context capture as the assistant does it (AX + screenshot + OCR).
         let provider = MacContextProvider()
-        let t0 = CFAbsoluteTimeGetCurrent()
-        let ctxAX = try? await provider.capture(ContextRequest(includeScreenshot: .never))
-        let axMs = ms(t0)
+        // Sampled 5x: single samples on shared CI VMs vary by >10x, so report first + median.
+        var ctxTimes: [Double] = []
+        var ctxAX: ScreenContext?
+        for _ in 0..<5 {
+            let t0 = CFAbsoluteTimeGetCurrent()
+            ctxAX = try? await provider.capture(ContextRequest(includeScreenshot: .never))
+            ctxTimes.append(ms(t0))
+        }
+        let axMs = ctxTimes.sorted()[ctxTimes.count / 2]
+        let firstMs = ctxTimes[0]
         let axText = ctxAX?.axRoot?.flattened().compactMap(\.value).joined(separator: " ") ?? ""
         record("textedit: context (AX only)", axText.contains("안녕하세요") ? "pass" : "fail",
-               ["ms": axMs, "app": ctxAX?.app?.name ?? "nil", "window": ctxAX?.window?.title ?? "nil", "foundPhraseInAX": axText.contains(phrase),
+               ["medianMs": axMs, "firstMs": firstMs, "app": ctxAX?.app?.name ?? "nil", "window": ctxAX?.window?.title ?? "nil", "foundPhraseInAX": axText.contains(phrase),
                 "limitations": ctxAX?.limitations.joined(separator: "; ") ?? ""])
         let t1 = CFAbsoluteTimeGetCurrent()
         let ctxImg = try? await provider.capture(ContextRequest(includeScreenshot: .always))
