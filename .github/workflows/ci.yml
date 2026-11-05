@@ -48,6 +48,8 @@ jobs:
     name: macOS — build, test, package
     runs-on: macos-26
     timeout-minutes: 60
+    permissions:
+      contents: write   # only used to publish screenshots/reports to the ci-artifacts branch
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
@@ -84,6 +86,24 @@ jobs:
         run: |
           set -o pipefail
           scripts/macos/live-gui-check.sh 2>&1 | tee test-results/live-gui-check.log
+      - name: Live probe (TextEdit, Safari, Finder, TTS; uses runner's existing permissions only)
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          dist/tagen-live-probe --output test-results/live-probe.json 2>&1 | tee test-results/live-probe.log
+      - name: Render UI screenshots
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          dist/Tagen.app/Contents/MacOS/Tagen --render-ui test-results/ui 2>&1 | tee test-results/render-ui.log
+      - name: Publish reports and screenshots to ci-artifacts branch
+        if: always() && github.event_name == 'push'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/ci/publish-artifacts.sh
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -101,4 +121,5 @@ jobs:
             dist/Tagen.zip
             dist/TagenFixture.zip
             dist/tagen-gui-check
+            dist/tagen-live-probe
             dist/BUILD-INFO.txt

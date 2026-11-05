@@ -14,7 +14,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 let app = NSApplication.shared
-if CommandLine.arguments.contains("--self-test") {
+if let i = CommandLine.arguments.firstIndex(of: "--render-ui"), i + 1 < CommandLine.arguments.count {
+    let dir = CommandLine.arguments[i + 1]
+    app.setActivationPolicy(.accessory)
+    Task { @MainActor in
+        let code = await UIRender.run(dir: dir)
+        exit(code)
+    }
+    app.run()
+} else if CommandLine.arguments.contains("--self-test") {
     app.setActivationPolicy(.accessory)
     Task { @MainActor in
         let code = await SelfTest.run()

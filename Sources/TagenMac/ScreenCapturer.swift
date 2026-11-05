@@ -54,14 +54,14 @@ public struct ScreenCapturer: Sendable {
     }
 
     /// Capture a region (global points) of the display that contains it.
-    public func captureRegion(_ region: Rect, layout: DisplayLayout) async throws -> CapturedImage {
+    public func captureRegion(_ region: Rect, layout: DisplayLayout, includeOwnWindows: Bool = false) async throws -> CapturedImage {
         guard Self.hasPermission else { throw CaptureError.permissionDenied }
         guard let d = layout.display(for: region) else { throw CaptureError.displayNotFound }
         let content: SCShareableContent
         do { content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) }
         catch { throw CaptureError.failed("\(error)") }
         guard let display = content.displays.first(where: { $0.displayID == d.id }) else { throw CaptureError.displayNotFound }
-        let mine = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
+        let mine = includeOwnWindows ? [] : content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
         let filter = SCContentFilter(display: display, excludingApplications: mine, exceptingWindows: [])
         let clipped = d.frame.intersection(region) ?? region
         let local = layout.localRect(fromGlobal: clipped, in: d)

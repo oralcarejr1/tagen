@@ -19,6 +19,9 @@ public final class OverlayController {
     private var refreshing = false
     public var onRemoved: (([(UUID, String)]) -> Void)?
     public var refreshInterval: TimeInterval = 0.12
+    /// Overlays are excluded from screen capture so they never feed back into model screenshots.
+    /// Verification tooling may turn this off to measure on-screen alignment from pixels.
+    public var excludeFromCapture = true { didSet { for p in panels.values { p.sharingType = excludeFromCapture ? .none : .readOnly } } }
 
     public init(frameProvider: @escaping @Sendable (ElementIdentity) async -> Rect?, windowFrameProvider: @escaping @Sendable (pid_t) -> Rect?) {
         self.frameProvider = frameProvider
@@ -52,6 +55,7 @@ public final class OverlayController {
         for d in layout.displays {
             guard let screen = MacDisplays.screen(for: d.id) else { continue }
             let panel = panels[d.id] ?? OverlayPanel(screen: screen)
+            panel.sharingType = excludeFromCapture ? .none : .readOnly
             panel.setFrame(screen.frame, display: false)
             panel.overlayView.contentsScale = screen.backingScaleFactor
             panels[d.id] = panel

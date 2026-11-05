@@ -9,7 +9,7 @@ VERSION="${TAGEN_VERSION:-0.1.0}"
 BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
 BUNDLE_ID="${TAGEN_BUNDLE_ID:-dev.tagen.Tagen}"
 
-for p in Tagen tagen-approval-mcp tagen-cli TagenFixtureApp tagen-gui-check; do
+for p in Tagen tagen-approval-mcp tagen-cli TagenFixtureApp tagen-gui-check tagen-live-probe; do
   swift build -c "$CONFIG" --product "$p"
 done
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
@@ -51,13 +51,14 @@ cp "$BIN/tagen-approval-mcp" "dist/Tagen.app/Contents/MacOS/"
 cp "$BIN/tagen-cli" "dist/Tagen.app/Contents/MacOS/"
 
 make_bundle "TagenFixture" "TagenFixtureApp" "dev.tagen.Fixture" ""
-cp "$BIN/tagen-gui-check" "dist/"
+cp "$BIN/tagen-gui-check" "$BIN/tagen-live-probe" "dist/"
 
 # Ad-hoc signature with hardened runtime (development only; not notarized).
 for h in tagen-approval-mcp tagen-cli; do codesign --force --sign - --options runtime "dist/Tagen.app/Contents/MacOS/$h"; done
 codesign --force --sign - --options runtime --entitlements Resources/Tagen.entitlements "dist/Tagen.app"
 codesign --force --sign - "dist/TagenFixture.app"
 codesign --force --sign - "dist/tagen-gui-check"
+codesign --force --sign - "dist/tagen-live-probe"
 
 (cd dist && ditto -c -k --keepParent Tagen.app Tagen.zip && ditto -c -k --keepParent TagenFixture.app TagenFixture.zip)
 {

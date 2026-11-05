@@ -31,6 +31,12 @@ public struct ContextSummary: Sendable, Equatable {
     public var screenshotReason: String?
     public var reusedPrevious: Bool
     public var limitations: [String]
+    public init(appName: String?, windowTitle: String?, elementCount: Int, hasSelection: Bool, usedScreenshot: Bool,
+                screenshotReason: String?, reusedPrevious: Bool, limitations: [String]) {
+        self.appName = appName; self.windowTitle = windowTitle; self.elementCount = elementCount; self.hasSelection = hasSelection
+        self.usedScreenshot = usedScreenshot; self.screenshotReason = screenshotReason; self.reusedPrevious = reusedPrevious
+        self.limitations = limitations
+    }
 }
 
 public enum AssistantEvent: Sendable, Equatable {
