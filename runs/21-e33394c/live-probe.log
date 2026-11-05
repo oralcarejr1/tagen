@@ -1,0 +1,14 @@
+IOServiceMatchingfailed for: AppleM2ScalerParavirtDriver
+[PASS] textedit: AX snapshot — elements=13 medianMs=179.1 truncated=false
+[PASS] textedit: context (AX only) — app=TextEdit foundPhraseInAX=true limitations= ms=10.1 window=probe.txt
+[PASS] textedit: window screenshot — bytes=21596 ms=1233.8 px=673x439 rect={79, 56, 673×439}
+[PASS] textedit: OCR of real window — hasKorean=true lines=3 ms=446.6 sample=_ probe.txt ~ Tagen Live probe 안녕하세요 2026 Second Line tor uck and selection.
+[PASS] textedit: selected text via AX — editable=true got=안녕하세요
+[FAIL] overlay alignment: textedit text area — expected={73.50, 82.50, 667×395} found={74, 83, 666×412} maxEdgeErrorPt=17.5 targetPt=12
+[FAIL] overlay alignment: textedit button AXCloseButton — expected={81.50, 58.50, 27×27} found={82, 59, 43×26} maxEdgeErrorPt=16.5 targetPt=12
+[PASS] safari: web content via AX — button=true elements=37 koreanHeading=true medianMs=33.2 truncated=false url=file:///private/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/tagen-probe-59ABB7/probe.html
+[PASS] overlay alignment: safari web button — expected={2.50, 194.50, 104×30} found={3, 195, 103×29} maxEdgeErrorPt=0.5 targetPt=12
+[PASS] finder: AX snapshot — elements=296 medianMs=64.1 truncated=false
+[PASS] tts: ko-KR synthesis — audioFrames=40870 voice=Yuna
+[PASS] tts: en-US synthesis — audioFrames=23736 voice=Samantha
+SUMMARY live probe: 10 pass, 2 fail, 0 blocked

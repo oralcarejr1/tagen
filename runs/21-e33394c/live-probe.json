@@ -1,0 +1,106 @@
+{
+  "environment" : {
+    "accessibility" : true,
+    "displays" : [
+      "{0, 0, 1024×768} @1.0x"
+    ],
+    "macOS" : "Version 26.6.2 (Build 25G83)",
+    "screenRecording" : true
+  },
+  "failed" : 2,
+  "passed" : 10,
+  "results" : [
+    {
+      "elements" : 13,
+      "medianMs" : 179.09999999999999,
+      "name" : "textedit: AX snapshot",
+      "status" : "pass",
+      "truncated" : false
+    },
+    {
+      "app" : "TextEdit",
+      "foundPhraseInAX" : true,
+      "limitations" : "",
+      "ms" : 10.1,
+      "name" : "textedit: context (AX only)",
+      "status" : "pass",
+      "window" : "probe.txt"
+    },
+    {
+      "bytes" : 21596,
+      "ms" : 1233.8,
+      "name" : "textedit: window screenshot",
+      "px" : "673x439",
+      "rect" : "{79, 56, 673×439}",
+      "status" : "pass"
+    },
+    {
+      "hasKorean" : true,
+      "lines" : 3,
+      "ms" : 446.60000000000002,
+      "name" : "textedit: OCR of real window",
+      "sample" : "_ probe.txt ~ Tagen Live probe 안녕하세요 2026 Second Line tor uck and selection.",
+      "status" : "pass"
+    },
+    {
+      "editable" : true,
+      "got" : "안녕하세요",
+      "name" : "textedit: selected text via AX",
+      "status" : "pass"
+    },
+    {
+      "expected" : "{73.50, 82.50, 667×395}",
+      "found" : "{74, 83, 666×412}",
+      "maxEdgeErrorPt" : 17.5,
+      "name" : "overlay alignment: textedit text area",
+      "status" : "fail",
+      "targetPt" : 12
+    },
+    {
+      "expected" : "{81.50, 58.50, 27×27}",
+      "found" : "{82, 59, 43×26}",
+      "maxEdgeErrorPt" : 16.5,
+      "name" : "overlay alignment: textedit button AXCloseButton",
+      "status" : "fail",
+      "targetPt" : 12
+    },
+    {
+      "button" : true,
+      "elements" : 37,
+      "koreanHeading" : true,
+      "medianMs" : 33.200000000000003,
+      "name" : "safari: web content via AX",
+      "status" : "pass",
+      "truncated" : false,
+      "url" : "file:\/\/\/private\/var\/folders\/n6\/hn37q6pj7sj_9dmqqc2113800000gn\/T\/tagen-probe-59ABB7\/probe.html"
+    },
+    {
+      "expected" : "{2.50, 194.50, 104×30}",
+      "found" : "{3, 195, 103×29}",
+      "maxEdgeErrorPt" : 0.5,
+      "name" : "overlay alignment: safari web button",
+      "status" : "pass",
+      "targetPt" : 12
+    },
+    {
+      "elements" : 296,
+      "medianMs" : 64.099999999999994,
+      "name" : "finder: AX snapshot",
+      "status" : "pass",
+      "truncated" : false
+    },
+    {
+      "audioFrames" : 40870,
+      "name" : "tts: ko-KR synthesis",
+      "status" : "pass",
+      "voice" : "Yuna"
+    },
+    {
+      "audioFrames" : 23736,
+      "name" : "tts: en-US synthesis",
+      "status" : "pass",
+      "voice" : "Samantha"
+    }
+  ],
+  "status" : "ran"
+}
