@@ -1,0 +1,114 @@
+{
+  "environment" : {
+    "accessibility" : true,
+    "displays" : [
+      "{0, 0, 1024×768} @1.0x"
+    ],
+    "macOS" : "Version 26.6.2 (Build 25G83)",
+    "screenRecording" : true
+  },
+  "failed" : 0,
+  "passed" : 13,
+  "results" : [
+    {
+      "elements" : 13,
+      "medianMs" : 38.5,
+      "name" : "textedit: AX snapshot",
+      "status" : "pass",
+      "truncated" : false
+    },
+    {
+      "app" : "TextEdit",
+      "firstMs" : 22.199999999999999,
+      "foundPhraseInAX" : true,
+      "limitations" : "",
+      "medianMs" : 7.4000000000000004,
+      "name" : "textedit: context (AX only)",
+      "status" : "pass",
+      "window" : "probe.txt"
+    },
+    {
+      "bytes" : 21632,
+      "ms" : 2653.5,
+      "name" : "textedit: window screenshot",
+      "px" : "673x439",
+      "rect" : "{79, 56, 673×439}",
+      "status" : "pass"
+    },
+    {
+      "hasKorean" : true,
+      "lines" : 3,
+      "ms" : 539.89999999999998,
+      "name" : "textedit: OCR of real window",
+      "sample" : "_ probe.txt ~ Tagen Live probe 안녕하세요 2026 Second Line tor uck and selection.",
+      "status" : "pass"
+    },
+    {
+      "editable" : true,
+      "got" : "안녕하세요",
+      "name" : "textedit: selected text via AX",
+      "status" : "pass"
+    },
+    {
+      "expected" : "{73.50, 82.50, 667×395}",
+      "found" : "{74, 83, 666×394}",
+      "maxEdgeErrorPt" : 0.5,
+      "name" : "overlay alignment: textedit text area",
+      "status" : "pass",
+      "targetPt" : 12
+    },
+    {
+      "firstNotificationMs" : 29.100000000000001,
+      "name" : "ax change notifications (window move)",
+      "notifications" : 1,
+      "registered" : 4,
+      "status" : "pass"
+    },
+    {
+      "expected" : "{81.50, 58.50, 27×27}",
+      "found" : "{82, 59, 26×26}",
+      "maxEdgeErrorPt" : 0.5,
+      "name" : "overlay alignment: textedit button AXCloseButton",
+      "status" : "pass",
+      "targetPt" : 12
+    },
+    {
+      "button" : true,
+      "elements" : 37,
+      "koreanHeading" : true,
+      "medianMs" : 29,
+      "name" : "safari: web content via AX",
+      "status" : "pass",
+      "truncated" : false,
+      "url" : "file:\/\/\/private\/var\/folders\/n6\/hn37q6pj7sj_9dmqqc2113800000gn\/T\/tagen-probe-E00A37\/probe.html"
+    },
+    {
+      "expected" : "{2.50, 194.50, 104×30}",
+      "found" : "{3, 195, 103×29}",
+      "maxEdgeErrorPt" : 0.5,
+      "name" : "overlay alignment: safari web button",
+      "status" : "pass",
+      "targetPt" : 12
+    },
+    {
+      "elements" : 296,
+      "medianMs" : 100.40000000000001,
+      "name" : "finder: AX snapshot",
+      "status" : "pass",
+      "truncated" : false
+    },
+    {
+      "audioFrames" : 40870,
+      "name" : "tts: ko-KR synthesis",
+      "status" : "pass",
+      "voice" : "Yuna"
+    },
+    {
+      "audioFrames" : 23736,
+      "name" : "tts: en-US synthesis",
+      "status" : "pass",
+      "voice" : "Samantha"
+    }
+  ],
+  "status" : "ran"
+}
