@@ -91,7 +91,7 @@ public struct ScreenCapturer: Sendable {
         let long = max(image.width, image.height)
         if long > maxLongEdge {
             let s = Double(maxLongEdge) / Double(long)
-            let w = max(1, Int(Double(image.width) * s)), h = max(1, Int(Double(image.height) * s))
+            let w = max(1, Int((Double(image.width) * s).rounded())), h = max(1, Int((Double(image.height) * s).rounded()))
             if let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
                                    space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
                 ctx.interpolationQuality = .high
