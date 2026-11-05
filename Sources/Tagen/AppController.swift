@@ -63,6 +63,9 @@ final class AppController {
         overlay = OverlayController(
             frameProvider: { [contextProvider] ident in await contextProvider.currentFrame(ofElementWithIdentity: ident) },
             windowFrameProvider: { [contextProvider] pid in contextProvider.windowFrame(pid: pid) })
+        overlay.changeSourceFactory = { [contextProvider] pid, idents, onChange in
+            contextProvider.observeChanges(pid: pid, identities: idents, onChange: onChange)
+        }
         voice = makeVoice()
         rebuildAgentManager()
         stop.register { [weak self] reason in

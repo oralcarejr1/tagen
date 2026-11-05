@@ -110,6 +110,7 @@ while let a = it.next() { if a == "--output" { outputPath = it.next() ?? outputP
             record("textedit: selected text via AX", got?.text == "안녕하세요" ? "pass" : "fail",
                    ["got": got?.text ?? "nil", "editable": got?.isEditable ?? false])
             await overlayAlignment(target: area.frame, label: "textedit text area")
+            await changeNotifications(app: app, window: win)
             if let btn = AXInspector.snapshot(window: win).root?.flattened().first(where: { $0.role == "AXButton" && ($0.frame?.width ?? 0) > 10 && ($0.frame?.width ?? 999) < 120 }),
                let f = btn.frame {
                 await overlayAlignment(target: f, label: "textedit button \(btn.displayName ?? btn.subrole ?? "")")
@@ -117,6 +118,25 @@ while let a = it.next() { if a == "--output" { outputPath = it.next() ?? outputP
         } else {
             record("textedit: selected text via AX", "fail", ["reason": "no AXTextArea"])
         }
+    }
+
+    /// AXObserver: moving the window must deliver notifications (drives overlay re-anchoring).
+    func changeNotifications(app: NSRunningApplication, window: AXElement) async {
+        let hits = Locked(0)
+        guard let obs = AXChangeObserver(pid: app.processIdentifier, elements: [], window: window, onChange: { hits.withLock { $0 += 1 } }) else {
+            record("ax change notifications", "fail", ["reason": "AXObserver could not be created"]); return
+        }
+        defer { obs.invalidate() }
+        guard let f = window.frame else { record("ax change notifications", "fail", ["reason": "no window frame"]); return }
+        var p = CGPoint(x: f.x + 40, y: f.y + 30)
+        let t0 = CFAbsoluteTimeGetCurrent()
+        if let v = AXValueCreate(.cgPoint, &p) { window.set(kAXPositionAttribute as String, v) }
+        var latency: Double = -1
+        for _ in 0..<40 { if hits.current > 0 { latency = ms(t0); break }; try? await Task.sleep(nanoseconds: 25_000_000) }
+        var back = CGPoint(x: f.x, y: f.y)
+        if let v = AXValueCreate(.cgPoint, &back) { window.set(kAXPositionAttribute as String, v) }
+        record("ax change notifications (window move)", hits.current > 0 ? "pass" : "fail",
+               ["notifications": hits.current, "firstNotificationMs": latency, "registered": obs.registeredCount])
     }
 
     /// Show a highlight overlay, capture the screen including it, and locate the orange stroke in pixels.

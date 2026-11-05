@@ -89,7 +89,11 @@ public enum AXInspector {
     ].map { $0 as String }
 
     /// Depth-first snapshot with element/depth limits. Uses batched attribute reads.
-    public static func snapshot(window: AXElement, maxDepth: Int = 25, maxElements: Int = 1500, rootID: String = "w0") -> AXSnapshotResult {
+    /// - Parameter timeBudget: seconds; traversal stops (marked truncated) when exceeded, so huge trees
+    ///   (e.g. long web pages) cannot stall the assistant.
+    public static func snapshot(window: AXElement, maxDepth: Int = 25, maxElements: Int = 1500, rootID: String = "w0",
+                                timeBudget: Double? = nil) -> AXSnapshotResult {
+        let deadline = timeBudget.map { CFAbsoluteTimeGetCurrent() + $0 }
         var handles: [String: AXElement] = [:]
         var count = 0
         var truncated = false
@@ -97,6 +101,7 @@ public enum AXInspector {
 
         func node(_ el: AXElement, id: String, depth: Int) -> AXElementSnapshot? {
             if count >= maxElements { truncated = true; return nil }
+            if let d = deadline, CFAbsoluteTimeGetCurrent() > d { truncated = true; return nil }
             count += 1
             var values: CFArray?
             let err = AXUIElementCopyMultipleAttributeValues(el.ref, snapshotAttributes as CFArray, AXCopyMultipleAttributeOptions(rawValue: 0), &values)

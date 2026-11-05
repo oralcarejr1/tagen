@@ -19,6 +19,12 @@ public final class OverlayController {
     private var refreshing = false
     public var onRemoved: (([(UUID, String)]) -> Void)?
     public var refreshInterval: TimeInterval = 0.12
+    /// Polling interval when change notifications are active (polling stays as a safety net).
+    public var fallbackRefreshInterval: TimeInterval = 0.5
+    /// Creates a change-notification source for the annotated elements (AXObserver on macOS).
+    public var changeSourceFactory: ((pid_t, [ElementIdentity], @escaping @Sendable () -> Void) -> AnyObject?)?
+    private var changeSource: AnyObject?
+    public var usesChangeNotifications: Bool { changeSource != nil }
     /// Overlays are excluded from screen capture so they never feed back into model screenshots.
     /// Verification tooling may turn this off to measure on-screen alignment from pixels.
     public var excludeFromCapture = true { didSet { for p in panels.values { p.sharingType = excludeFromCapture ? .none : .readOnly } } }
@@ -38,10 +44,18 @@ public final class OverlayController {
         lifecycle.set(annotations)
         rebuildPanels()
         redraw()
+        changeSource = nil
+        if let pid, let factory = changeSourceFactory {
+            let idents = annotations.compactMap { a -> ElementIdentity? in if case .element(let i, _) = a.target { return i }; return nil }
+            changeSource = factory(pid, idents) { [weak self] in
+                Task { @MainActor in self?.tick() }
+            }
+        }
         startTracking()
     }
 
     public func clear() {
+        changeSource = nil
         lifecycle.clear()
         redraw()
         timer?.invalidate(); timer = nil
@@ -74,14 +88,15 @@ public final class OverlayController {
     func startTracking() {
         timer?.invalidate()
         guard !lifecycle.annotations.isEmpty else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+        let interval = changeSource == nil ? refreshInterval : fallbackRefreshInterval
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
     }
 
     func tick() {
         guard !refreshing else { return }
-        guard !lifecycle.annotations.isEmpty else { timer?.invalidate(); timer = nil; redraw(); return }
+        guard !lifecycle.annotations.isEmpty else { timer?.invalidate(); timer = nil; changeSource = nil; redraw(); return }
         refreshing = true
         let anns = lifecycle.annotations
         let pid = trackedPID

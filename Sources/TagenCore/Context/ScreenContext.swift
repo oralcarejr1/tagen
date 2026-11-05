@@ -168,14 +168,16 @@ public struct ContextRequest: Sendable, Equatable {
     public var region: Rect?                // explicit user-selected region (global)
     public var maxAXDepth: Int
     public var maxAXElements: Int
+    /// Seconds allowed for the accessibility traversal before it is cut short.
+    public var axTimeBudget: Double
 
     public enum ScreenshotPolicy: String, Sendable, Codable { case never, ifNeeded, always }
 
     public init(includeAccessibility: Bool = true, includeSelection: Bool = true, includeScreenshot: ScreenshotPolicy = .ifNeeded,
-                region: Rect? = nil, maxAXDepth: Int = 25, maxAXElements: Int = 1500) {
+                region: Rect? = nil, maxAXDepth: Int = 25, maxAXElements: Int = 1500, axTimeBudget: Double = 0.8) {
         self.includeAccessibility = includeAccessibility; self.includeSelection = includeSelection
         self.includeScreenshot = includeScreenshot; self.region = region
-        self.maxAXDepth = maxAXDepth; self.maxAXElements = maxAXElements
+        self.maxAXDepth = maxAXDepth; self.maxAXElements = maxAXElements; self.axTimeBudget = axTimeBudget
     }
 }
 

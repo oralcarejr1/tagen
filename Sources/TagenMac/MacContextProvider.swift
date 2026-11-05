@@ -9,6 +9,7 @@ public final class MacContextProvider: ScreenContextProvider, @unchecked Sendabl
     let ocr = TextRecognizer()
     let packager: ContextPackager
     private let lastHandles = Locked<[String: AXElement]>([:])
+    private let lastWindow = Locked<AXElement?>(nil)
     /// The last non-Tagen frontmost application (the assistant panel itself may be key).
     private let lastExternalApp = Locked<NSRunningApplication?>(nil)
     private var observer: NSObjectProtocol?
@@ -49,11 +50,13 @@ public final class MacContextProvider: ScreenContextProvider, @unchecked Sendabl
             if let w = window {
                 ctx.window = AXInspector.windowInfo(w)
                 if request.includeAccessibility {
-                    let snap = AXInspector.snapshot(window: w, maxDepth: request.maxAXDepth, maxElements: request.maxAXElements)
+                    let snap = AXInspector.snapshot(window: w, maxDepth: request.maxAXDepth, maxElements: request.maxAXElements,
+                                                    timeBudget: request.axTimeBudget)
                     ctx.axRoot = snap.root
                     ctx.focusedElementID = snap.focusedID
                     lastHandles.set(snap.handles)
-                    if snap.truncated { ctx.limitations.append("accessibility tree truncated") }
+                    lastWindow.set(w)
+                    if snap.truncated { ctx.limitations.append("accessibility tree truncated (size/time budget)") }
                 }
                 if let bid = app.bundleIdentifier, Self.browsers.contains(bid) { ctx.url = AXInspector.documentURL(window: w) }
             } else {
@@ -114,6 +117,18 @@ public final class MacContextProvider: ScreenContextProvider, @unchecked Sendabl
         let snap = AXInspector.snapshot(window: w, maxDepth: 25, maxElements: 1500)
         guard let root = snap.root, let e = identity.resolve(in: root) else { return nil }
         return e.frame
+    }
+
+    /// Observe moves/resizes/destruction of the annotated elements (and their window) so overlays update
+    /// immediately instead of waiting for the next poll.
+    public func observeChanges(pid: pid_t, identities: [ElementIdentity], onChange: @escaping @Sendable () -> Void) -> AXChangeObserver? {
+        var elements: [AXElement] = []
+        let handles = lastHandles.current
+        for id in identities {
+            if let h = handles[id.path], h.string(kAXRoleAttribute as String) == id.role { elements.append(h) }
+        }
+        let window = lastWindow.current.flatMap { $0.pid == pid ? $0 : nil } ?? AXInspector.focusedWindow(of: AXInspector.application(pid: pid))
+        return AXChangeObserver(pid: pid, elements: elements, window: window, onChange: onChange)
     }
 
     /// Current frame of the focused window of `pid` (for screen-anchored annotations).
