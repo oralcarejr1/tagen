@@ -59,7 +59,7 @@ struct ApprovalBanner: View {
                         .foregroundStyle(a.request.risk >= .high ? .red : .orange)
                     Text(a.request.title).font(.headline)
                     Spacer()
-                    Text("\(state.t("Risk", "위험도")): \(a.request.risk.description)").font(.caption).padding(4)
+                    Text("\(state.t("Risk", "위험도")): \(a.request.risk.displayName(state.lang))").font(.caption).padding(4)
                         .background((a.request.risk >= .high ? Color.red : Color.orange).opacity(0.2), in: Capsule())
                 }
                 Text(a.request.detail).font(.system(.callout, design: .monospaced)).lineLimit(6).textSelection(.enabled)

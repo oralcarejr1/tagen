@@ -54,6 +54,7 @@ struct SettingsView: View {
             }
             Button(state.t("Save", "저장")) { draft.onboardingCompleted = true; save() }.buttonStyle(.borderedProminent)
         }
+        .formStyle(.grouped)
     }
 
     var models: some View {
@@ -69,11 +70,11 @@ struct SettingsView: View {
             Section(state.t("Model per task", "작업별 모델")) {
                 ForEach(ModelPurpose.allCases, id: \.self) { p in
                     HStack {
-                        Text(p.rawValue).frame(width: 120, alignment: .leading)
+                        Text(p.displayName(state.lang)).frame(width: 170, alignment: .leading)
                         Picker("", selection: routeBinding(p).provider) {
                             Text("Anthropic").tag(ProviderKind.anthropic); Text(state.t("OpenAI-compatible", "OpenAI 호환")).tag(ProviderKind.openAICompatible)
                         }.labelsHidden().frame(width: 150)
-                        TextField("model", text: routeBinding(p).model).textFieldStyle(.roundedBorder)
+                        TextField("model", text: routeBinding(p).model).textFieldStyle(.roundedBorder).labelsHidden()
                     }
                 }
             }
@@ -84,6 +85,7 @@ struct SettingsView: View {
             }
             Button(state.t("Save", "저장")) { save() }.buttonStyle(.borderedProminent)
         }
+        .formStyle(.grouped)
     }
 
     func routeBinding(_ p: ModelPurpose) -> Binding<ModelSettings.Route> {
@@ -103,6 +105,7 @@ struct SettingsView: View {
                          "스크린샷과 음성은 메모리에서만 처리되고 저장되지 않습니다. 비밀 정보는 기록과 로그에서 가려집니다.")).font(.caption)
             Button(state.t("Save", "저장")) { save() }.buttonStyle(.borderedProminent)
         }
+        .formStyle(.grouped)
     }
 
     var voice: some View {
@@ -115,13 +118,14 @@ struct SettingsView: View {
             Text(state.t("The microphone is only active while the talk key is held.", "마이크는 말하기 키를 누르고 있는 동안에만 켜집니다.")).font(.caption)
             Button(state.t("Save", "저장")) { save() }.buttonStyle(.borderedProminent)
         }
+        .formStyle(.grouped)
     }
 
     var agents: some View {
         Form {
             Toggle(state.t("Allow Tagen to start coding agents (Codex / Claude Code)", "Tagen이 코딩 에이전트(Codex / Claude Code) 실행 허용"), isOn: $draft.agentExecutionEnabled)
             Picker(state.t("Default permissions", "기본 권한"), selection: $draft.agentDefaultProfile) {
-                ForEach(AgentPermissionProfile.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                ForEach(AgentPermissionProfile.allCases, id: \.self) { Text($0.displayName(state.lang)).tag($0) }
             }
             Picker("Codex", selection: $draft.codexMode) {
                 Text("app-server (approvals in Tagen)").tag(CodexMode.appServer); Text("exec --json (sandbox only)").tag(CodexMode.exec)
@@ -149,6 +153,7 @@ struct SettingsView: View {
             }
             Button(state.t("Save", "저장")) { save() }.buttonStyle(.borderedProminent)
         }
+        .formStyle(.grouped)
     }
 
     var computerUse: some View {
@@ -163,6 +168,7 @@ struct SettingsView: View {
                          "삭제·구매·전송·보안 설정·비밀 정보·터미널 같은 고위험 단계는 항상 확인합니다. 암호 관리자와 개인정보 설정은 자동화하지 않습니다.")).font(.caption)
             Button(state.t("Save", "저장")) { save() }.buttonStyle(.borderedProminent)
         }
+        .formStyle(.grouped)
     }
 }
 
@@ -178,13 +184,15 @@ struct PermissionsView: View {
                     Image(systemName: icon(state.permissions[k])).foregroundStyle(color(state.permissions[k])).frame(width: 20)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(state.lang == .korean ? k.title.ko : k.title.en).bold()
-                        Text(k.purpose).font(.caption).foregroundStyle(.secondary)
+                        Text(k.purpose(state.lang)).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text(state.permissions[k]?.rawValue ?? "…").font(.caption)
+                    Text(state.permissions[k]?.displayName(state.lang) ?? "…").font(.caption)
                     if k.isSystemManaged {
                         Button(state.t("Request", "요청")) { app?.requestPermission(k) }.disabled(state.permissions[k] == .granted)
                         Button(state.t("Open Settings", "설정 열기")) { app?.openPermissionSettings(k) }
+                    } else {
+                        Text(state.t("Change in the Agents tab", "에이전트 탭에서 변경")).font(.caption2).foregroundStyle(.secondary)
                     }
                 }
                 Divider()

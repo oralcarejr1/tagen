@@ -26,7 +26,7 @@ struct AgentsView: View {
                     Button(state.t("Choose…", "선택…")) { chooseFolder() }
                 }
                 Picker(state.t("Permissions", "권한"), selection: $profile) {
-                    ForEach(AgentPermissionProfile.allCases, id: \.self) { p in Text(p.displayName).tag(p) }
+                    ForEach(AgentPermissionProfile.allCases, id: \.self) { p in Text(p.displayName(state.lang)).tag(p) }
                 }
                 TextField(state.t("Model (optional)", "모델 (선택)"), text: $model).textFieldStyle(.roundedBorder)
                 TextEditor(text: $prompt).font(.body).frame(minHeight: 80).border(.quaternary)
@@ -73,7 +73,7 @@ struct AgentsView: View {
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }
                     if let r = t.result {
-                        Text(r.finalText).textSelection(.enabled).padding(6).background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                        MarkdownText(r.finalText).textSelection(.enabled).padding(6).background(.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
                         if !r.changedFiles.isEmpty { Text("files: " + r.changedFiles.joined(separator: ", ")).font(.caption) }
                         if !r.permissionDenials.isEmpty { Text("denied: " + r.permissionDenials.joined(separator: ", ")).font(.caption).foregroundStyle(.orange) }
                     }

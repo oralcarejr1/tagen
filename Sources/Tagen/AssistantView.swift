@@ -46,7 +46,7 @@ struct AssistantView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     if !state.response.isEmpty {
-                        Text(LocalizedStringKey(state.response)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        MarkdownText(state.response).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                     }
                     ForEach(state.guidanceNotes, id: \.self) { n in Text("⚠︎ \(n)").font(.caption2).foregroundStyle(.secondary) }
                     if state.mode == .act && !state.actLog.isEmpty {
@@ -79,6 +79,30 @@ struct AssistantView: View {
         case .act: return state.t("Describe a task to perform (each risky step asks first)", "수행할 작업을 설명하세요 (위험한 단계는 먼저 묻습니다)")
         }
     }
+}
+
+/// Inline Markdown with Korean-friendly **bold** (see InlineMarkdown) and preserved line breaks.
+struct MarkdownText: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    static func attributed(_ text: String) -> AttributedString {
+        var result = AttributedString()
+        for run in InlineMarkdown.runs(text) {
+            var part = (try? AttributedString(markdown: run.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+                ?? AttributedString(run.text)
+            if run.bold {
+                for r in part.runs {
+                    let existing = part[r.range].inlinePresentationIntent ?? []
+                    part[r.range].inlinePresentationIntent = existing.union(.stronglyEmphasized)
+                }
+            }
+            result.append(part)
+        }
+        return result
+    }
+
+    var body: some View { Text(Self.attributed(text)) }
 }
 
 struct SelectionActionsBar: View {

@@ -122,6 +122,10 @@ while let a = it.next() { if a == "--output" { outputPath = it.next() ?? outputP
     /// Show a highlight overlay, capture the screen including it, and locate the orange stroke in pixels.
     func overlayAlignment(target: Rect?, label: String) async {
         guard let target, !target.isEmpty else { record("overlay alignment: \(label)", "fail", ["reason": "no frame"]); return }
+        let layout0 = MacDisplays.layout()
+        let region0 = target.insetBy(dx: -30, dy: -30)
+        // Baseline without the overlay, so the app's own orange/yellow pixels (e.g. window buttons) are ignored.
+        let baseline = (try? await ScreenCapturer().captureRegion(region0, layout: layout0, includeOwnWindows: true)).flatMap(ScreenCapturer.cgImage)
         let oc = OverlayController(frameProvider: { _ in nil }, windowFrameProvider: { _ in nil })
         oc.excludeFromCapture = false
         oc.show([Annotation(kind: .highlight, target: .screen(target), label: nil, createdAt: Date(), ttl: 30, windowFrame: nil)], pid: nil)
@@ -133,7 +137,7 @@ while let a = it.next() { if a == "--output" { outputPath = it.next() ?? outputP
               let cg = ScreenCapturer.cgImage(img) else {
             record("overlay alignment: \(label)", "blocked", ["reason": "screen capture unavailable"]); return
         }
-        guard let box = orangeBoundingBox(cg) else {
+        guard let box = orangeBoundingBox(cg, baseline: baseline) else {
             record("overlay alignment: \(label)", "fail", ["reason": "overlay stroke not found in capture"]); return
         }
         let found = img.geometry.globalRect(fromImagePixel: box)
@@ -143,17 +147,28 @@ while let a = it.next() { if a == "--output" { outputPath = it.next() ?? outputP
                ["maxEdgeErrorPt": (err * 10).rounded() / 10, "found": "\(found)", "expected": "\(expected)", "targetPt": 12])
     }
 
-    func orangeBoundingBox(_ cg: CGImage) -> Rect? {
+    func pixels(_ cg: CGImage, width w: Int, height h: Int) -> [UInt8]? {
+        var buf = [UInt8](repeating: 0, count: w * h * 4)
+        let ok = buf.withUnsafeMutableBytes { raw -> Bool in
+            guard let ctx = CGContext(data: raw.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h)); return true
+        }
+        return ok ? buf : nil
+    }
+
+    func orangeBoundingBox(_ cg: CGImage, baseline: CGImage?) -> Rect? {
         let w = cg.width, h = cg.height
-        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
-                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-        guard let data = ctx.data else { return nil }
-        let px = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        guard let px = pixels(cg, width: w, height: h) else { return nil }
+        let base = baseline.flatMap { $0.width == w && $0.height == h ? pixels($0, width: w, height: h) : nil }
         var minX = Int.max, minY = Int.max, maxX = -1, maxY = -1
         for y in 0..<h { for x in 0..<w {
             let i = (y * w + x) * 4
             let r = Int(px[i]), g = Int(px[i + 1]), b = Int(px[i + 2])
+            if let base {
+                let d = abs(r - Int(base[i])) + abs(g - Int(base[i + 1])) + abs(b - Int(base[i + 2]))
+                if d < 60 { continue }   // unchanged by the overlay
+            }
             if r > 200 && g > 90 && g < 190 && b < 90 {   // systemOrange stroke
                 minX = min(minX, x); maxX = max(maxX, x); minY = min(minY, y); maxY = max(maxY, y)
             }

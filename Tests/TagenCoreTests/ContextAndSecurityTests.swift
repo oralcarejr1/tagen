@@ -262,3 +262,25 @@ final class SupportTests: XCTestCase {
         XCTAssertEqual([1, 2, 3, 4].map(p.delay(forAttempt:)), [0.5, 1, 2, 3])
     }
 }
+
+final class InlineMarkdownTests: XCTestCase {
+    func testKoreanParticleAfterBold() {
+        XCTAssertEqual(InlineMarkdown.runs("**파일 › 내보내기 › PDF…**를 선택하세요."),
+                       [.init("파일 › 내보내기 › PDF…", bold: true), .init("를 선택하세요.", bold: false)])
+        XCTAssertEqual(InlineMarkdown.runs("품질을 정한 뒤 **다음…**을 누릅니다."),
+                       [.init("품질을 정한 뒤 ", bold: false), .init("다음…", bold: true), .init("을 누릅니다.", bold: false)])
+    }
+    func testEnglishMultipleAndUnmatched() {
+        XCTAssertEqual(InlineMarkdown.runs("Click **Save** then **Close**."),
+                       [.init("Click ", bold: false), .init("Save", bold: true), .init(" then ", bold: false), .init("Close", bold: true), .init(".", bold: false)])
+        XCTAssertEqual(InlineMarkdown.runs("2 ** 3 is power"), [.init("2 ** 3 is power", bold: false)])
+        XCTAssertEqual(InlineMarkdown.runs("**a\nb**"), [.init("**a\nb**", bold: false)], "bold never spans lines")
+        XCTAssertEqual(InlineMarkdown.runs(""), [])
+    }
+    func testLocalizedNames() {
+        XCTAssertEqual(RiskLevel.high.displayName(.korean), "높음")
+        XCTAssertEqual(PermissionState.notDetermined.displayName(.english), "Not requested")
+        XCTAssertFalse(PermissionKind.microphone.purpose(.korean).isEmpty)
+        XCTAssertEqual(ModelPurpose.guidance.displayName(.korean), "가이드 (화면 표시)")
+    }
+}

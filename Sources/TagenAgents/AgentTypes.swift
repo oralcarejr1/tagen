@@ -19,11 +19,15 @@ public enum AgentPermissionProfile: String, Sendable, Codable, CaseIterable {
     /// File edits inside the project are allowed; commands still ask.
     case autoEditsInProject
 
-    public var displayName: String {
-        switch self {
-        case .readOnly: return "Read-only"
-        case .askEveryTime: return "Ask before edits and commands"
-        case .autoEditsInProject: return "Auto-approve project edits"
+    public var displayName: String { displayName(.english) }
+    public func displayName(_ lang: LanguageCode) -> String {
+        switch (self, lang) {
+        case (.readOnly, .korean): return "읽기 전용"
+        case (.askEveryTime, .korean): return "편집·명령 전에 묻기"
+        case (.autoEditsInProject, .korean): return "프로젝트 내 편집 자동 허용"
+        case (.readOnly, _): return "Read-only"
+        case (.askEveryTime, _): return "Ask before edits and commands"
+        case (.autoEditsInProject, _): return "Auto-approve project edits"
         }
     }
 }
