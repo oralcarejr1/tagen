@@ -142,7 +142,10 @@ public protocol CodingAgentAdapter: Sendable {
 public enum AuthErrorDetector {
     static let patterns = ["not logged in", "please run /login", "run /login", "login expired", "invalid api key", "authentication_error",
                            "authentication failed", "unauthorized", "401", "codex login", "not authenticated", "oauth token has expired",
-                           "apikeyhelper", "credit balance is too low", "invalid x-api-key", "please log in", "sign in"]
+                           "apikeyhelper", "credit balance is too low", "invalid x-api-key", "please log in", "sign in",
+                           // Claude Agent SDK error categories (SDKAssistantMessageError / SDKStartupFailureReason)
+                           "authentication_failed", "oauth_org_not_allowed", "verification_required", "cloud_credential_error",
+                           "gateway_signin_required", "gateway_access_denied", "account_on_hold"]
     public static func isAuthError(_ text: String) -> Bool {
         let t = text.lowercased()
         return patterns.contains { t.contains($0) }

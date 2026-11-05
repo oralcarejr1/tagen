@@ -1,7 +1,8 @@
 import Foundation
 import TagenCore
 
-/// Claude Code integration through its supported headless interface:
+/// Claude Code integration through its supported headless interface (message and permission
+/// shapes checked against @anthropic-ai/claude-agent-sdk 0.3.318 type definitions):
 /// `claude -p --output-format stream-json --verbose` (prompt on stdin), `--resume <id>`,
 /// `--permission-mode`, and `--permission-prompt-tool mcp__tagen__approve` backed by the
 /// bundled `tagen-approval-mcp` relay so permission prompts surface in Tagen's UI.
@@ -126,6 +127,8 @@ public final class ClaudeStreamParser: @unchecked Sendable {
     private let files = Locked<[String]>([])
     private let lastText = Locked<String>("")
     private let sessionID = Locked<String?>(nil)
+    /// Last SDKAssistantMessageError seen (e.g. "authentication_failed"), used to classify the result.
+    private let assistantError = Locked<String?>(nil)
     let workingDirectory: String
 
     public init(workingDirectory: String) { self.workingDirectory = workingDirectory }
@@ -140,6 +143,8 @@ public final class ClaudeStreamParser: @unchecked Sendable {
             if let sub = m["subtype"]?.stringValue, sub != "init" {
                 if sub == "api_retry", let err = m["error"]?.stringValue, AuthErrorDetector.isAuthError(err) {
                     out.append(.log("authentication problem: \(err)"))
+                } else if sub == "permission_denied", let tool = m["tool_name"]?.stringValue {
+                    out.append(.log("permission denied: \(tool)"))
                 } else {
                     out.append(.log("system: \(sub)"))
                 }
@@ -150,6 +155,10 @@ public final class ClaudeStreamParser: @unchecked Sendable {
                 out.append(.messageDelta(t))
             }
         case "assistant":
+            if let err = m["error"]?.stringValue {
+                assistantError.set(err)
+                out.append(.log("assistant error: \(err)"))
+            }
             for block in m.at("message", "content")?.arrayValue ?? [] {
                 switch block["type"]?.stringValue {
                 case "text":
@@ -190,11 +199,14 @@ public final class ClaudeStreamParser: @unchecked Sendable {
                 return t + (d.at("tool_input", "command")?.stringValue.map { ": \($0)" } ?? "")
             }
             let sid = m["session_id"]?.stringValue ?? sessionID.current
-            let combined = ([text] + errors).joined(separator: "\n")
+            let startup = m["startup_failure_reason"]?.stringValue
+            let combined = ([text] + errors + [startup, assistantError.current].compactMap { $0 }).joined(separator: "\n")
             if isError && AuthErrorDetector.isAuthError(combined) {
                 out.append(.failed(AgentFailure(kind: .authentication, message: combined.trimmingCharacters(in: .whitespacesAndNewlines), sessionID: sid)))
             } else if sub != "success" && sub != "error_max_turns" {
-                out.append(.failed(AgentFailure(kind: .agentError, message: errors.isEmpty ? sub : errors.joined(separator: "\n"), sessionID: sid)))
+                var msg = errors.isEmpty ? sub : errors.joined(separator: "\n")
+                if let st = startup { msg += " (startup: \(st))" }
+                out.append(.failed(AgentFailure(kind: .agentError, message: msg, sessionID: sid)))
             } else {
                 let finalText = text.isEmpty ? (sub == "error_max_turns" ? "Stopped: reached the maximum number of turns." : lastText.current) : text
                 out.append(.completed(AgentResult(sessionID: sid, finalText: finalText, isError: isError, turns: m["num_turns"]?.intValue,

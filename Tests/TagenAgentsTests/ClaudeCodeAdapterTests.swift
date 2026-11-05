@@ -105,6 +105,19 @@ final class ClaudeCodeAdapterTests: XCTestCase {
         XCTAssertEqual(ev.failure?.kind, .notInstalled)
     }
 
+    func testSDKErrorCategoriesClassifiedAsAuth() {
+        let p = ClaudeStreamParser(workingDirectory: "/p")
+        _ = p.handle(["type": "assistant", "session_id": "s", "parent_tool_use_id": nil, "error": "authentication_failed",
+                      "message": ["content": [["type": "text", "text": "API Error"]]]])
+        let ev = p.handle(["type": "result", "subtype": "success", "is_error": true, "result": "API Error", "session_id": "s"])
+        XCTAssertEqual(ev.failure?.kind, .authentication)
+        let st = ClaudeStreamParser(workingDirectory: "/p").handle(["type": "result", "subtype": "error_during_execution", "is_error": true,
+                                                                   "session_id": "s", "errors": ["startup failed"], "startup_failure_reason": "gateway_signin_required"])
+        XCTAssertEqual(st.failure?.kind, .authentication)
+        XCTAssertTrue(AuthErrorDetector.isAuthError("authentication_failed"))
+        XCTAssertFalse(AuthErrorDetector.isAuthError("rate_limit"))
+    }
+
     func testParserHandlesErrorResultsAndDenials() {
         let p = ClaudeStreamParser(workingDirectory: "/p")
         let ev = p.handle(["type": "result", "subtype": "error_during_execution", "is_error": true, "session_id": "s", "errors": ["tool crashed"]])

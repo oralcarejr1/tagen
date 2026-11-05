@@ -8,11 +8,11 @@
   Recording for runner-launched processes, so the fixture-app live check *did* run there — see test-results. Tagen never
   edits TCC; elsewhere `tagen-gui-check` reports `blocked` instead of simulating.)
 - REA could not inspect HeyClicky: no binary available and `www.heyclicky.com` is blocked by the session network policy.
-- Real `claude` / `codex` CLIs were never executed (by design, to avoid recursive Claude Code launches); protocol
-  behaviour is verified against deterministic fakes. Exact field names must be confirmed on the Mac:
-  - Codex app-server: run `codex app-server generate-json-schema` and compare with `CodexAppServerAdapter`.
-  - Claude Code `--permission-prompt-tool` MCP reply contract (`behavior/updatedInput/message`) was not confirmed in
-    the fetched docs; if it differs, prompts are denied and listed in `permission_denials`.
+- Codex: verified against the official app-server schema and the real `codex app-server` 0.166.0 binary (handshake,
+  thread/turn start, interrupt, resume) — but no model turn completed (no login/network), so live approvals and tool
+  events from a real model run remain unverified. Re-check after upgrades with `scripts/check-codex-protocol.sh`.
+- Claude Code: formats checked against the Agent SDK 0.3.318 type definitions; the real `claude` CLI was intentionally
+  never launched from this development session, so an end-to-end run happens first on your Mac.
 
 ## Product
 - Development build is **ad-hoc signed, hardened runtime, not notarized**. Gatekeeper will block a downloaded copy until

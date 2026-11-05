@@ -1,6 +1,24 @@
 # Codex and Claude Code integration — protocol notes
 
-## Claude Code (verified against code.claude.com docs, 2026-11)
+## Claude Code (docs 2026-11 + @anthropic-ai/claude-agent-sdk 0.3.318 type definitions)
+Checked by reading the SDK package's `sdk.d.ts` / `sdk.mjs` (downloaded with `npm pack`, never executed; the
+`claude` CLI itself was not launched — see CLAUDE.md):
+- SDK launches the CLI with `--output-format stream-json --verbose --input-format stream-json` plus `--permission-mode`,
+  `--resume`, `--model`, `--max-turns`, `--allowedTools`, `--add-dir`, `--include-partial-messages`; Tagen uses the
+  documented `-p` (prompt on stdin) variant of the same flags.
+- `--permission-prompt-tool`: the SDK passes either `stdio` (its own control channel: `control_request` with
+  `subtype:"can_use_tool"`) or an MCP tool name verbatim — Tagen's `mcp__tagen__approve` uses the latter.
+- `PermissionResult` = `{behavior:"allow", updatedInput?, …}` | `{behavior:"deny", message, interrupt?}` — **matches**
+  the relay's replies (previously listed as unconfirmed).
+- `SDKSystemMessage` (`init`: session_id, tools, model, permissionMode…), `SDKAssistantMessage`
+  (`message`, `parent_tool_use_id`, **`error`**), `SDKUserMessage` (`tool_use_result`), `SDKPartialAssistantMessage`
+  (`stream_event`), `SDKResultSuccess` / `SDKResultError` (`errors[]`, `permission_denials[{tool_name,tool_use_id,tool_input}]`,
+  **`startup_failure_reason`**) — match the parser.
+- Added from the types: `SDKAssistantMessageError` (`authentication_failed`, `oauth_org_not_allowed`, …) and
+  `SDKStartupFailureReason` (`gateway_signin_required`, …) now classify failures as authentication; `api_retry.error`
+  categories are recognised; `system/permission_denied` is logged.
+
+### Original notes (docs)
 - Headless: `claude -p --output-format stream-json --verbose` (prompt on stdin), optional `--include-partial-messages`
   (emits `stream_event` with `event.delta.type == "text_delta"`).
 - Session: `--resume <session_id>`; `session_id` appears on stream messages.
@@ -9,9 +27,7 @@
 - Approvals: `--permission-prompt-tool mcp__<server>__<tool>` with `--mcp-config`. Tagen ships `tagen-approval-mcp`
   (stdio MCP server, tool `approve`) that relays to the app over a 0600 Unix socket with a per-run token. Reply shape
   `{"behavior":"allow","updatedInput":{…}}` / `{"behavior":"deny","message":"…"}` matches the documented `canUseTool`
-  result. **The exact MCP prompt-tool contract was not confirmed in the fetched docs** — verify on a Mac (see
-  `docs/known-limitations.md`). If it differs, Claude Code still reports blocked tools in `permission_denials`, which
-  Tagen displays.
+  result (confirmed against SDK `PermissionResult`, see above).
 - Result message: `type:"result"`, `subtype` `success` / `error_max_turns` / `error_during_execution` /
   `error_max_budget_usd` …, `is_error`, `result` (success only), `errors[]` (error arm), `session_id`,
   `total_cost_usd`, `num_turns`, `duration_ms`, `permission_denials`.
