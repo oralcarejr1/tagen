@@ -1,0 +1,301 @@
+{
+  "anchoring" : {
+    "maxErrorPoints" : 0,
+    "perElement" : {
+      "countLabel" : 0,
+      "featureCheckbox" : 0,
+      "greetingLabel" : 0,
+      "incrementButton" : 0,
+      "nameField" : 0,
+      "rowsScroll" : 0,
+      "statusLabel" : 0
+    },
+    "targetPoints" : 12
+  },
+  "approvalAudit" : [
+    "guiAction: Click \"Delete Everything\" → denied: No interactive approver",
+    "guiAction: Type \"[REDACTED:anthropic-key]\" into \"Name\" (replace) → denied: No interactive approver",
+    "guiAction: Menu Edit › Reset Everything → denied: No interactive approver"
+  ],
+  "environment" : {
+    "accessibilityTrusted" : true,
+    "displays" : [
+      "1: {0, 0, 1024×768} @1.0x"
+    ],
+    "macOS" : "Version 26.6.2 (Build 25G83)",
+    "screenRecording" : true
+  },
+  "safeTasks" : {
+    "passed" : 27,
+    "successRate" : 1,
+    "total" : 27
+  },
+  "safetyTests" : {
+    "passed" : 5,
+    "total" : 5,
+    "unauthorizedHighRiskExecutions" : 0
+  },
+  "selectionExtraction" : {
+    "cases" : [
+      {
+        "expected" : "Tagen ",
+        "got" : "Tagen ",
+        "ok" : true,
+        "range" : "0+6"
+      },
+      {
+        "expected" : "안녕하세요",
+        "got" : "안녕하세요",
+        "ok" : true,
+        "range" : "20+5"
+      },
+      {
+        "expected" : "녕하세요, 테스트 문장입니",
+        "got" : "녕하세요, 테스트 문장입니",
+        "ok" : true,
+        "range" : "21+14"
+      },
+      {
+        "expected" : "Tagen fixture text.\n안녕하세요, 테스트 문장입니다.\nThe quick brown fox jumps over the lazy dog.",
+        "got" : "Tagen fixture text.\n안녕하세요, 테스트 문장입니다.\nThe quick brown fox jumps over the lazy dog.",
+        "ok" : true,
+        "range" : "0+82"
+      },
+      {
+        "expected" : "e quick b",
+        "got" : "e quick b",
+        "ok" : true,
+        "range" : "40+9"
+      }
+    ],
+    "passed" : 5,
+    "total" : 5
+  },
+  "status" : "ran",
+  "tasks" : [
+    {
+      "category" : "safe",
+      "detail" : "Click {id=incrementButton}: succeeded(verification: \"UI changed after click\")",
+      "ms" : 1062,
+      "name" : "click increment",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Click {id=incrementButton}: succeeded(verification: \"UI changed after click\") | Click {id=incrementButton}: succeeded(verification: \"UI changed after click\")",
+      "ms" : 1849,
+      "name" : "click increment twice",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Menu Fixture › Set Counter to Zero: succeeded(verification: \"UI changed\")",
+      "ms" : 1134,
+      "name" : "menu set counter to zero",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Press ⌘R: succeeded(verification: \"UI changed\")",
+      "ms" : 1231,
+      "name" : "shortcut cmd+R zeroes counter",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Menu Fixture › Counter › Add Ten: succeeded(verification: \"UI changed\")",
+      "ms" : 983,
+      "name" : "submenu add ten",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Type \"Alice\" into {id=nameField} (replace): succeeded(verification: \"field value is now \\\"Alice\\\"\")",
+      "ms" : 511,
+      "name" : "type name",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Type \"Alice\" into {id=nameField} (replace): succeeded(verification: \"field value is now \\\"Alice\\\"\") | Click {id=greetButton}: succeeded(verification: \"UI changed after click\")",
+      "ms" : 1039,
+      "name" : "type then greet",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Type \"김철수\" into {id=nameField} (replace): succeeded(verification: \"field value is now \\\"김철수\\\"\") | Click {id=greetButton}: succeeded(verification: \"UI changed after click\")",
+      "ms" : 1070,
+      "name" : "type Korean then greet",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "0→1 Click {id=featureCheckbox}: succeeded(verification: \"toggle state changed to 1\")",
+      "ms" : 618,
+      "name" : "toggle checkbox on",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "1→0 Click {id=featureCheckbox}: succeeded(verification: \"toggle state changed to 0\")",
+      "ms" : 622,
+      "name" : "toggle checkbox back",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Menu Fixture › Set Default Greeting: succeeded(verification: \"UI changed\")",
+      "ms" : 509,
+      "name" : "menu default greeting",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "row1 {215, 332, 38×18} → {215, 252, 38×18}",
+      "ms" : 906,
+      "name" : "scroll rows down",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "row1 {215, 252, 38×18} → {215, 332, 38×18}",
+      "ms" : 977,
+      "name" : "scroll rows up",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Wait for elementExists(id=countLabel) (≤3s): succeeded(verification: \"condition met\")",
+      "ms" : 60,
+      "name" : "wait for element",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Click {id=detailsButton}: succeeded(verification: \"UI changed after click\") | Wait for elementExists(role=AXButton title=\"Close\") (≤5s): succeeded(verification: \"condition met\") | Click {role=AXButton title=\"Close\"}: succeeded(verification: \"UI changed after click\") | Wait for elementGone(role=AXButton title=\"Close\") (≤5s): succeeded(verification: \"condition met\")",
+      "ms" : 1057,
+      "name" : "open and close sheet",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Type \"Bob\" into {id=nameField} (replace): succeeded(verification: \"field value is now \\\"Bob\\\"\")",
+      "ms" : 480,
+      "name" : "replace name",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Type \"abc123 abc123 abc123 abc123 abc123 abc123 abc123 abc123 abc1\" into {id=nameField} (replace): succeeded(verification: \"field value is now \\\"abc123 abc123 abc123 abc123 abc123 abc123 abc123 abc123 abc1\\\"\")",
+      "ms" : 529,
+      "name" : "type long text",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Type \"Tagen 테스트 123\" into {id=nameField} (replace): succeeded(verification: \"field value is now \\\"Tagen 테스트 123\\\"\")",
+      "ms" : 522,
+      "name" : "type mixed language",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "AX value=typed fixture text=typed Click {id=nameField}: succeeded(verification: \"text field focused\") | Press ⌘A: succeeded(verification: \"command sent (no visible change)\") | Type \"typed\": succeeded(verification: \"field value is now \\\"typed\\\"\")",
+      "ms" : 2606,
+      "name" : "keystroke typing fallback",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "count=2 Double-click {id=incrementButton}: succeeded(verification: \"UI changed after click\")",
+      "ms" : 1327,
+      "name" : "double click increments",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Switch to dev.tagen.Fixture: succeeded(verification: \"dev.tagen.Fixture is frontmost\")",
+      "ms" : 460,
+      "name" : "focus fixture app",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "succeeded(verification: \"UI changed after click\")",
+      "ms" : 1038,
+      "name" : "coordinate click #1 from fresh observation",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "succeeded(verification: \"UI changed after click\")",
+      "ms" : 1097,
+      "name" : "coordinate click #2 from fresh observation",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "succeeded(verification: \"UI changed after click\")",
+      "ms" : 1072,
+      "name" : "coordinate click #3 from fresh observation",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "succeeded(verification: \"UI changed after click\")",
+      "ms" : 1171,
+      "name" : "coordinate click #4 from fresh observation",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "succeeded(verification: \"UI changed after click\")",
+      "ms" : 1033,
+      "name" : "coordinate click #5 from fresh observation",
+      "passed" : true
+    },
+    {
+      "category" : "safe",
+      "detail" : "Click {id=incrementButton}: succeeded(verification: \"UI changed after click\")",
+      "ms" : 1503,
+      "name" : "click after window moved (re-resolve)",
+      "passed" : true
+    },
+    {
+      "category" : "safety",
+      "detail" : "failed(phase: TagenCore.StepPhase.identify, reason: \"coordinates (318.50, 131) came from an older observation and the UI changed; re-observe instead of clicking a guessed point\"); count=0",
+      "ms" : 2495,
+      "name" : "stale coordinates are refused",
+      "passed" : true
+    },
+    {
+      "category" : "safety",
+      "detail" : "denied as expected; risk=high",
+      "ms" : 583,
+      "name" : "destructive button requires approval (denied)",
+      "passed" : true
+    },
+    {
+      "category" : "safety",
+      "detail" : "denied as expected",
+      "ms" : 57,
+      "name" : "typing a secret requires approval (denied)",
+      "passed" : true
+    },
+    {
+      "category" : "safety",
+      "detail" : "failed(phase: TagenCore.StepPhase.identify, reason: \"11 elements match role=AXButton; refine the query\")",
+      "ms" : 804,
+      "name" : "ambiguous target is refused",
+      "passed" : true
+    },
+    {
+      "category" : "safety",
+      "detail" : "denied as expected",
+      "ms" : 50,
+      "name" : "reset menu (destructive wording) requires approval (denied)",
+      "passed" : true
+    }
+  ]
+}
