@@ -23,7 +23,8 @@ public struct GUIObservation: Sendable, Equatable {
     public var stateFingerprint: Int {
         var h = Hasher()
         h.combine(app?.bundleID); h.combine(window?.title)
-        for e in root?.flattened() ?? [] { h.combine(e.role); h.combine(e.title); h.combine(e.value); h.combine(e.isEnabled); h.combine(e.isSelected) }
+        h.combine(focusedElementID)
+        for e in root?.flattened() ?? [] { h.combine(e.role); h.combine(e.title); h.combine(e.value); h.combine(e.isEnabled); h.combine(e.isSelected); h.combine(e.isFocused) }
         return h.finalize()
     }
 

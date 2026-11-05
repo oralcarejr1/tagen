@@ -75,7 +75,7 @@ public struct ActionExecutor: Sendable {
 
             // 2. Identify
             let element: AXElementSnapshot?
-            switch identify(action.target, in: obs, previous: previous) {
+            switch identify(action.target, in: obs, previous: previous, action: action) {
             case .success(let e): element = e
             case .failure(let why):
                 note(.identify, why)
@@ -174,8 +174,13 @@ public struct ActionExecutor: Sendable {
 
     enum Identified { case success(AXElementSnapshot?), failure(String) }
 
-    func identify(_ target: ElementTarget?, in obs: GUIObservation, previous: GUIObservation?) -> Identified {
-        guard let target else { return .success(nil) }
+    func identify(_ target: ElementTarget?, in obs: GUIObservation, previous: GUIObservation?, action: GUIAction? = nil) -> Identified {
+        guard let target else {
+            // Untargeted typing goes to the focused text input, so it can be validated and verified.
+            if case .typeText? = action, let fid = obs.focusedElementID, let f = obs.element(id: fid),
+               AXElementSnapshot.textRoles.contains(f.role) { return .success(f) }
+            return .success(nil)
+        }
         guard let root = obs.root else { return .failure("no accessibility tree for the current window") }
         switch target {
         case .query(let q):
@@ -272,8 +277,14 @@ public struct ActionExecutor: Sendable {
     func verify(_ action: GUIAction, element: AXElementSnapshot?, before: GUIObservation, after: GUIObservation) -> (Bool, String) {
         switch action {
         case .typeText(_, let text, let replace, let submit):
-            guard let e = element, let root = after.root else { return (after.stateFingerprint != before.stateFingerprint, "UI changed after typing") }
-            if submit { return (after.stateFingerprint != before.stateFingerprint, "UI changed after submit") }
+            guard let e = element, let root = after.root else {
+                let changed = after.stateFingerprint != before.stateFingerprint
+                return (changed, changed ? "UI changed after typing" : "no observable change after typing")
+            }
+            if submit {
+                let changed = after.stateFingerprint != before.stateFingerprint
+                return (changed, changed ? "UI changed after submit" : "no observable change after submit")
+            }
             if e.isSecure { return (true, "secure field (value not readable)") }
             let identity = ElementIdentity(element: e, pid: before.app?.pid)
             guard let now = identity.resolve(in: root) else { return (false, "text field disappeared") }
@@ -285,6 +296,10 @@ public struct ActionExecutor: Sendable {
                let root = after.root, let now = ElementIdentity(element: e, pid: before.app?.pid).resolve(in: root) {
                 let ok = now.value != e.value || now.isSelected != e.isSelected
                 return (ok, ok ? "toggle state changed to \(now.value ?? "?")" : "toggle state unchanged")
+            }
+            if let e = element, AXElementSnapshot.textRoles.contains(e.role), let fid = after.focusedElementID,
+               let f = after.element(id: fid), ElementIdentity(element: e, pid: before.app?.pid).matchScore(f) > 0 {
+                return (true, "text field focused")
             }
             let changed = after.stateFingerprint != before.stateFingerprint
             return (changed, changed ? "UI changed after click" : "no observable UI change after click")

@@ -101,7 +101,7 @@ enum Fixtures {
 /// In-memory simulation of a small UI (TEST DOUBLE — not a live GUI test). It models the
 /// fixture app's behaviour so executor logic can be tested deterministically.
 final class SimulatedGUIDriver: GUIDriver, @unchecked Sendable {
-    struct State { var count = 0; var name = ""; var checkbox = false; var deleted = false; var windowOffset = 0.0; var scroll = 0 }
+    struct State { var count = 0; var name = ""; var checkbox = false; var deleted = false; var windowOffset = 0.0; var scroll = 0; var focused: String? }
     let state = Locked(State())
     let performed = Locked<[GUIPrimitive]>([])
     let failNextPerforms = Locked(0)
@@ -119,6 +119,7 @@ final class SimulatedGUIDriver: GUIDriver, @unchecked Sendable {
         t.children[1].value = s.deleted ? "Count: DELETED" : "Count: \(s.count)"
         t.children[2].value = s.name
         t.children[4].value = s.checkbox ? "1" : "0"
+        for i in t.children.indices { t.children[i].isFocused = t.children[i].identifier != nil && t.children[i].identifier == s.focused }
         return t
     }
 
@@ -126,7 +127,7 @@ final class SimulatedGUIDriver: GUIDriver, @unchecked Sendable {
         let s = state.current
         return GUIObservation(app: AppInfo(name: "TagenFixture", bundleID: bundleID, pid: 4242),
                               window: WindowInfo(title: "Tagen Fixture", frame: Rect(x: 100 + s.windowOffset, y: 100 + s.windowOffset, width: 560, height: 620)),
-                              root: tree(s), layout: Fixtures.layout)
+                              root: tree(s), focusedElementID: tree(s).children.first { $0.isFocused }?.id, layout: Fixtures.layout)
     }
 
     func perform(_ p: GUIPrimitive) async throws {
@@ -146,9 +147,11 @@ final class SimulatedGUIDriver: GUIDriver, @unchecked Sendable {
                 if let hit = t.flattened().first(where: { $0.frame?.contains(pt) == true && $0.isInteractive && $0.role != "AXWindow" }) {
                     if hit.identifier == "incrementButton" { s.count += n }
                     if hit.identifier == "deleteButton" { s.deleted = true }
+                    if AXElementSnapshot.textRoles.contains(hit.role) { s.focused = hit.identifier }
                 }
             case .axSetValue(let id, let v): if id.identifier == "nameField" { s.name = v }
-            case .typeKeystrokes(let t): s.name += t
+            case .axFocus(let id): s.focused = id.identifier
+            case .typeKeystrokes(let t): if s.focused == "nameField" { s.name += t }   // keystrokes go to the focused field only
             case .menuPath(let path, _): if path == ["Fixture", "Set Counter to Zero"] { s.count = 0 }
             case .keyCombo(let k): if k.key == "r" && k.modifiers == [.command] { s.count = 0 }
             case .scroll: s.scroll += 1

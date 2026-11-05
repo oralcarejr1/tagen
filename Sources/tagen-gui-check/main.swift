@@ -43,6 +43,10 @@ let truthPath = NSTemporaryDirectory() + "tagen-fixture-truth-\(UUID().uuidStrin
 let proc = Process()
 proc.executableURL = URL(fileURLWithPath: fixture + "/Contents/MacOS/TagenFixture")
 proc.arguments = ["--truth", truthPath]
+// Detach the fixture from our stdout/stderr: otherwise it keeps the CI log pipe open after we exit.
+proc.standardOutput = FileHandle.nullDevice
+proc.standardError = FileHandle.nullDevice
+proc.standardInput = FileHandle.nullDevice
 do { try proc.run() } catch { writeReport(["status": "error", "reason": "cannot launch fixture: \(error)"]); exit(1) }
 defer { proc.terminate() }
 
@@ -58,7 +62,7 @@ for _ in 0..<60 {
     await activateFixture()
     if let o = try? await driver.observe(scopeBundleID: bundleID), o.root?.flattened().contains(where: { $0.identifier == "incrementButton" }) == true { ready = true; break }
 }
-guard ready else { writeReport(["status": "error", "reason": "fixture window not observable", "environment": env]); exit(1) }
+guard ready else { writeReport(["status": "error", "reason": "fixture window not observable", "environment": env]); proc.terminate(); exit(1) }
 
 let audit = MemoryAuditSink()
 // Safe tasks run with a presenter that denies everything: they must succeed without needing
@@ -248,6 +252,9 @@ let report: [String: Any] = [
     "tasks": results.map { ["name": $0.name, "category": $0.category, "passed": $0.passed, "detail": $0.detail, "ms": $0.durationMs] },
 ]
 writeReport(report)
+// `exit` skips `defer`, so stop the fixture explicitly.
+proc.terminate()
+proc.waitUntilExit()
 exit(safeRate >= 0.9 && unauthorized == 0 ? 0 : 1)
 #else
 print("tagen-gui-check runs on macOS only.")

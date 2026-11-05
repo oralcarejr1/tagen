@@ -167,6 +167,24 @@ final class ActionExecutorTests: XCTestCase {
         XCTAssertFalse(d.state.current.deleted)
     }
 
+    func testClickFocusesTextFieldAndUntargetedTypingVerified() async {
+        let (d, e, _) = make()
+        d.state.withLock { $0.name = "x" }
+        let c = await e.run(.click(q("nameField")), scopeBundleID: scope)
+        XCTAssertEqual(c.outcome, .succeeded(verification: "text field focused"))
+        let t = await e.run(.typeText(nil, text: "typed", replaceExisting: false), scopeBundleID: scope)
+        XCTAssertTrue(t.succeeded, "\(t.outcome)")
+        XCTAssertEqual(d.state.current.name, "xtyped")
+        if case .succeeded(let v) = t.outcome { XCTAssertTrue(v.contains("xtyped")) }
+    }
+
+    func testUntargetedTypingWithoutFocusFailsVerification() async {
+        let (d, e, _) = make()
+        let t = await e.run(.typeText(nil, text: "lost", replaceExisting: false), scopeBundleID: scope)
+        if case .failed(.verify, let why) = t.outcome { XCTAssertEqual(why, "no observable change after typing") } else { XCTFail("\(t.outcome)") }
+        XCTAssertEqual(d.state.current.name, "")
+    }
+
     func testMenuShortcutScrollWait() async {
         let (d, e, _) = make()
         d.state.withLock { $0.count = 5 }

@@ -48,7 +48,7 @@ L3 packaged-app smoke on CI, L4 live GUI on a Mac with permissions, L5 physical-
 ### Phase 5 — Computer use
 - Files: `TagenCore/ComputerUse/*`, `TagenMac/MacGUIDriver.swift`, `Sources/TagenFixtureApp`, `Sources/tagen-gui-check`.
 - Tests: ActionPolicyTests, ActionExecutorTests, ComputerUseSessionTests, WorkflowTests.W10 (simulated UI).
-- Still required: `scripts/macos/live-gui-check.sh` on a Mac with Accessibility granted (28 safe tasks + 5 safety tests).
+- Still required: `scripts/macos/live-gui-check.sh` on a Mac with Accessibility granted (27 safe tasks + 5 safety tests).
 
 ### Phase 6 — Integration & delivery
 - Files: `Sources/Tagen/*`, packaging scripts, docs.
