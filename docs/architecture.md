@@ -68,6 +68,24 @@ observation; stale coordinates are refused; user mouse/keyboard activity pauses 
 System Settings, `EmergencyStop` (⌃⌥⌘. / menu / panel button) cancels model calls, speech, agents, automation and
 overlays; Keychain for credentials; redaction everywhere text is persisted or logged; screen content is untrusted data.
 
+## Additions after the first delivery
+- **Prompt caching** — frozen system prompt carries an explicit `cache_control` breakpoint; multi-turn requests
+  (Ask/Guide follow-ups, Act planner) add top-level automatic caching so each turn reads the previous ones from cache.
+  One-shot selection actions don't write cache. `TokenUsage` reports cache read/write tokens.
+- **Act planner** — compact per-step tree (`ContextPackager.Options.planner`), "changes since previous step"
+  (`ObservationDiff`), screenshot attached when accessibility is thin or on `{"type":"screenshot"}`; `image_point`
+  targets are converted through the screenshot's `CaptureGeometry`. Per-task model-token budget (`maxModelTokens`).
+- **Conversation resume** — History › "Continue this conversation" restores the stored transcript as untrusted text in
+  a fresh model context (no fabricated earlier turns, so append-only history stays valid); new turns append to the same record.
+- **Configurable shortcuts** — `HotkeyBindings` (defaults, validation: conflicts, modifier rules, emergency stop required;
+  Carbon masks), re-registered on save; menu bar shows current bindings. Mic button context menu switches ko/en recognition.
+- **AX performance & anchoring** — snapshot time budget (default 0.8 s → "truncated"); overlays re-anchor on
+  `AXObserver` move/resize/destroy notifications (`AXChangeObserver`), with polling kept at 0.5 s as a safety net.
+- **Codex / Claude Code** — adapters verified against codex-cli 0.166.0's generated schema + live `codex app-server`, and
+  against the Claude Agent SDK 0.3.318 types (see `docs/research/codex-claude-protocols.md`).
+- **CI artifacts** — `Tagen --render-ui <dir>` renders panel/settings screens; `tagen-live-probe` measures real apps;
+  both are published to the `ci-artifacts` branch.
+
 ## Verification levels
 1. Unit + integration tests on Linux (Docker, Swift 6.2) — TagenCore, TagenAgents (fake CLIs, real relay binary).
 2. macOS CI compile + the same tests + TagenMacTests (OCR, Keychain, display layout, overlay) on `macos-26`.
