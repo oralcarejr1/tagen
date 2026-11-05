@@ -73,18 +73,21 @@ final class PanelApprovalPresenter: ApprovalPresenter, @unchecked Sendable {
         @Sendable func finish(_ d: ApprovalDecision) {
             if let c = once.withLock({ v -> CheckedContinuation<ApprovalDecision, Never>? in let c = v; v = nil; return c }) { c.resume(returning: d) }
         }
+        let st = state          // AppState is main-actor isolated (Sendable)
+        let onPresent = self.onPresent
         return await withTaskCancellationHandler {
             await withCheckedContinuation { (c: CheckedContinuation<ApprovalDecision, Never>) in
                 once.set(c)
-                Task { @MainActor [weak self] in
-                    guard let self, let state = self.state else { finish(.denied(reason: "UI unavailable")); return }
-                    state.enqueueApproval(request) { finish($0) }
-                    self.onPresent()
+                Task { @MainActor in
+                    guard let st else { finish(.denied(reason: "UI unavailable")); return }
+                    guard once.current != nil else { return }   // already cancelled / timed out
+                    st.enqueueApproval(request) { finish($0) }
+                    onPresent()
                 }
             }
-        } onCancel: { [weak self] in
+        } onCancel: {
             finish(.denied(reason: "cancelled"))
-            Task { @MainActor in self?.state?.approvals.removeAll { $0.id == request.id } }
+            Task { @MainActor in st?.approvals.removeAll { $0.id == request.id } }
         }
     }
 }
