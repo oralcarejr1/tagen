@@ -21,7 +21,7 @@ while let a = it.next() {
 @MainActor func writeReport(_ obj: [String: Any]) {
     if let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]) {
         try? d.write(to: URL(fileURLWithPath: outputPath))
-        print(String(decoding: d, as: UTF8.self))
+        if obj["tasks"] == nil { print(String(decoding: d, as: UTF8.self)) }   // full report is in the output file
     }
 }
 
@@ -252,6 +252,9 @@ let report: [String: Any] = [
     "tasks": results.map { ["name": $0.name, "category": $0.category, "passed": $0.passed, "detail": $0.detail, "ms": $0.durationMs] },
 ]
 writeReport(report)
+print(String(format: "SUMMARY safe %d/%d (%.1f%%) · safety %d/%d · unauthorized %d · anchoring max %.1f pt · selection %d/%d",
+             safe.filter(\.passed).count, safe.count, safeRate * 100, safety.filter(\.passed).count, safety.count, unauthorized,
+             maxAnchor, selOK, selectionResults.count))
 // `exit` skips `defer`, so stop the fixture explicitly.
 proc.terminate()
 proc.waitUntilExit()

@@ -9,5 +9,4 @@ cd "$ROOT"
 mkdir -p test-results
 "$ROOT/dist/tagen-gui-check" --fixture "$ROOT/dist/TagenFixture.app" --output test-results/live-gui-check.json
 STATUS=$?
-cat test-results/live-gui-check.json 2>/dev/null || true
 exit $STATUS
