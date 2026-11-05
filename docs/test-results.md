@@ -21,7 +21,7 @@ Only results that were actually executed are recorded here. Verification levels:
 | WorkflowTests | W3 locate+highlight follows window move (≤ 12 pt), W4 spoken question→spoken answer, W10 permission revoked mid-task, **100 mixed sessions (ask/guide/selection/act/cancel) with 0 crashes** (test doubles) |
 
 ## L2 — macOS CI (`macos-26`, Xcode 26.6, macOS 26.7.2, Apple silicon)
-Latest green: run 28 (8d956ac) — build, XCTest, package, verify, smoke launch, self-test, live checks. First full run:
+Latest green: run 31 (ab80ef4) — build, XCTest, package, verify, smoke launch, self-test, live checks. First full run:
 Run 9 (commit fb4e9a7, branch `feature/tagen-macos-assistant`, run id 41947578149): **build ✔, 130 XCTest cases ✔
 (1 skipped)**, including TagenMacTests that run for real on the runner: Vision OCR of rendered Korean + English
 text with coordinate mapping, screenshot encode/downscale geometry, display layout vs `NSScreen`, Keychain
@@ -95,7 +95,7 @@ Prerequisites: macOS 14+ (tested build target), `Tagen.app` from CI artifact, An
 
 ## L4b — Live probe on built-in apps (CI runner `macos-26`, macOS 26.6.2, 1024×768 @1×)
 `tagen-live-probe` against real TextEdit / Safari / Finder. Full reports: branch `ci-artifacts`, `runs/<n>-<sha>/`.
-Latest: **run 28, commit 8d956ac — 13 pass, 0 fail, 0 blocked** (also 13/13 in run 27, bf6fb5a).
+Latest: **run 31, commit ab80ef4 — 13 pass, 0 fail, 0 blocked** (also 13/13 in runs 27–29; table shows run 28 timings).
 
 | Check | Run 21 (e33394c) | Run 28 (8d956ac) |
 |---|---|---|
@@ -129,5 +129,5 @@ first ScreenCaptureKit call; physical-Mac numbers (P-checklist) are what matters
 
 ## CI availability
 Commits 5cd52c7–1ea45e9 (runs 22–23) were not started because of an account billing/spending-limit block. After the
-repository was made public, runs 24, 27 and 28 completed green on Linux and macOS (runs 25–26 were superseded while queued: the
+repository was made public, runs 24 and 27–31 completed green on Linux and macOS (runs 25–26 were superseded while queued: the
 concurrency group keeps only the newest pending run).
