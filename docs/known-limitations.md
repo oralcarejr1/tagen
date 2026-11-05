@@ -14,6 +14,9 @@
 - Claude Code: formats checked against the Agent SDK 0.3.318 type definitions; the real `claude` CLI was intentionally
   never launched from this development session, so an end-to-end run happens first on your Mac.
 
+- GitHub Actions is currently blocked by account billing (spending limit); the latest UI commits are compiled on Linux
+  only. macOS runner minutes are expensive — consider running CI on demand (`workflow_dispatch`) once billing is fixed.
+
 ## Product
 - Development build is **ad-hoc signed, hardened runtime, not notarized**. Gatekeeper will block a downloaded copy until
   you remove the quarantine attribute or right-click → Open. TCC grants are tied to the code signature, so each new

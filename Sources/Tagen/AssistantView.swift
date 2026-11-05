@@ -92,9 +92,10 @@ struct MarkdownText: View {
             var part = (try? AttributedString(markdown: run.text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
                 ?? AttributedString(run.text)
             if run.bold {
-                for r in part.runs {
-                    let existing = part[r.range].inlinePresentationIntent ?? []
-                    part[r.range].inlinePresentationIntent = existing.union(.stronglyEmphasized)
+                let ranges = part.runs.map(\.range)
+                for range in ranges {
+                    let existing = part[range].inlinePresentationIntent ?? []
+                    part[range].inlinePresentationIntent = existing.union(.stronglyEmphasized)
                 }
             }
             result.append(part)

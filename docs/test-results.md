@@ -91,3 +91,33 @@ Prerequisites: macOS 14+ (tested build target), `Tagen.app` from CI artifact, An
 | P16 | Revoke Accessibility in System Settings while Tagen runs; try Ask and Act | banner explains missing permission; Act fails with permission message; no crash | permission revocation |
 | P17 | Disconnect network; Ask | clear network error, no hang | network failure |
 | P18 | Quit and relaunch Tagen | settings, history and agent sessions persist; history contains no screenshots | restart/recovery |
+
+## L4b — Live probe on built-in apps (CI runner, commit e33394c, run id 41963634875)
+`tagen-live-probe` against real TextEdit / Safari / Finder (full report: branch `ci-artifacts`, `runs/21-e33394c/`):
+
+| Check | Result |
+|---|---|
+| TextEdit AX snapshot (13 elements) | median **179 ms** |
+| TextEdit context, AX only (found the Korean phrase) | **10 ms** ✔ |
+| TextEdit window screenshot (ScreenCaptureKit, 673×439 px) | 1.23 s ✔ |
+| OCR of the real window (Vision, ko+en) | 447 ms, 3 lines, Korean recognised ✔ |
+| Selected text via AX in TextEdit | "안녕하세요" exact, editable ✔ |
+| Safari local page via AX (Korean heading + button, URL extracted) | 37 elements, median **33 ms** ✔ |
+| Overlay alignment on Safari web button (pixel measurement) | **0.5 pt** ✔ |
+| Overlay alignment on TextEdit (text area / close button) | 17.5 / 16.5 pt ✘ — *measurement artefact*: the overlay's top-left edges matched within 0.5 pt, but the detector also picked up the window's yellow minimize button. Probe now diffs against a baseline capture (5cd52c7) — **re-run pending** |
+| Finder AX snapshot (296 elements) | median **64 ms** ✔ |
+| TTS ko-KR (Yuna) / en-US (Samantha) | audio produced (40 870 / 23 736 frames) ✔ |
+| Fixture live check, same run | 27/27 safe, 5/5 safety, 0 unauthorized ✔ |
+
+## UI review from CI screenshots (run 21, 14 PNGs: panel Ask/Guide/Act+approval/Agents, settings Permissions/Models/Computer Use, ko+en)
+Defects found and fixed in 5cd52c7 (**not yet re-rendered/compiled on macOS** — see below):
+- Korean bold showed raw `**` (`**PDF…**를`: CommonMark won't close `**` between punctuation and a Hangul particle) →
+  `InlineMarkdown` splits bold runs itself (unit-tested on Linux).
+- Korean UI mixed in English: risk level ("high"), permission states/descriptions, agent permission profiles, model
+  purpose keys → localized.
+- Settings forms rendered section titles as right-aligned labels → `.formStyle(.grouped)`.
+
+## CI availability
+From commit 5cd52c7 on, GitHub Actions jobs were **not started**: "recent account payments have failed or your spending
+limit needs to be increased" (account billing). Commits 5cd52c7 and later are verified on Linux only (142 tests) until
+Actions billing is restored; then re-run CI to compile them on macOS and re-render the UI/probe.
