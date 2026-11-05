@@ -149,7 +149,7 @@ final class SimulatedGUIDriver: GUIDriver, @unchecked Sendable {
                 }
             case .axSetValue(let id, let v): if id.identifier == "nameField" { s.name = v }
             case .typeKeystrokes(let t): s.name += t
-            case .menuPath(let path, _): if path == ["Fixture", "Reset Counter"] { s.count = 0 }
+            case .menuPath(let path, _): if path == ["Fixture", "Set Counter to Zero"] { s.count = 0 }
             case .keyCombo(let k): if k.key == "r" && k.modifiers == [.command] { s.count = 0 }
             case .scroll: s.scroll += 1
             default: break

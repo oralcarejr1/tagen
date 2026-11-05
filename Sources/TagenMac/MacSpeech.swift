@@ -56,25 +56,25 @@ public final class MacSpeechRecognizer: SpeechRecognizer, @unchecked Sendable {
                 else { continuation.finish(throwing: SpeechRecognitionError.failed(e.localizedDescription)) }
             }
         }
-        lock.lock(); self.engine = engine; self.request = req; self.task = t; self.recognizer = rec; lock.unlock()
+        lock.withLock { self.engine = engine; self.request = req; self.task = t; self.recognizer = rec }
         continuation.onTermination = { [weak self] _ in self?.stopAudio() }
         return stream
     }
 
     private func stopAudio() {
-        lock.lock(); let e = engine; engine = nil; lock.unlock()
+        let e: AVAudioEngine? = lock.withLock { let e = engine; engine = nil; return e }
         if let e { e.inputNode.removeTap(onBus: 0); e.stop() }
     }
 
     public func finish() async {
         stopAudio()
-        lock.lock(); let r = request; lock.unlock()
+        let r = lock.withLock { request }
         r?.endAudio()
     }
 
     public func cancel() async {
         stopAudio()
-        lock.lock(); let t = task; task = nil; request = nil; lock.unlock()
+        let t: SFSpeechRecognitionTask? = lock.withLock { let t = task; task = nil; request = nil; return t }
         t?.cancel()
     }
 }
@@ -95,7 +95,7 @@ public final class MacSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSy
         await stop()
         await withTaskCancellationHandler {
             await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-                lock.lock(); continuation = c; lock.unlock()
+                lock.withLock { continuation = c }
                 let u = AVSpeechUtterance(string: text)
                 u.voice = AVSpeechSynthesisVoice(language: language.localeIdentifier)
                 u.rate = rate
@@ -113,7 +113,7 @@ public final class MacSpeechSynthesizer: NSObject, SpeechSynthesizer, AVSpeechSy
     }
 
     private func resume() {
-        lock.lock(); let c = continuation; continuation = nil; lock.unlock()
+        let c: CheckedContinuation<Void, Never>? = lock.withLock { let c = continuation; continuation = nil; return c }
         c?.resume()
     }
 

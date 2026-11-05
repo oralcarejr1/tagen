@@ -52,7 +52,7 @@ public struct ContextPackager: Sendable {
     }
 
     /// Apps whose content is mostly not exposed via accessibility.
-    static let canvasApps: Set<String> = [
+    public static let canvasApps: Set<String> = [
         "com.figma.Desktop", "com.adobe.Photoshop", "com.apple.Preview", "com.apple.QuickTimePlayerX",
         "com.adobe.illustrator", "com.microsoft.VSCode.canvas", "org.blenderfoundation.blender",
     ]

@@ -47,7 +47,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
 
         let fxItem = NSMenuItem(); main.addItem(fxItem)
         let fx = NSMenu(title: "Fixture"); fxItem.submenu = fx
-        let reset = NSMenuItem(title: "Reset Counter", action: #selector(resetCounter), keyEquivalent: "r"); reset.target = self; fx.addItem(reset)
+        let reset = NSMenuItem(title: "Set Counter to Zero", action: #selector(resetCounter), keyEquivalent: "r"); reset.target = self; fx.addItem(reset)
         let def = NSMenuItem(title: "Set Default Greeting", action: #selector(defaultGreeting), keyEquivalent: ""); def.target = self; fx.addItem(def)
         let sub = NSMenuItem(title: "Counter", action: nil, keyEquivalent: ""); fx.addItem(sub)
         let subMenu = NSMenu(title: "Counter"); sub.submenu = subMenu

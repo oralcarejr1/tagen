@@ -228,6 +228,8 @@ public actor AssistantOrchestrator {
             case .completed(let r): final = r
             }
         }
+        // A cancelled consumer ends the stream without an error; report it as cancellation.
+        try Task.checkCancellation()
         guard let r = final else { throw ModelError.decoding("no completion") }
         return r
     }

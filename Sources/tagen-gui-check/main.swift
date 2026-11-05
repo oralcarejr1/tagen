@@ -89,12 +89,12 @@ func task(_ name: String, _ category: String = "safe", _ body: () async -> (Bool
     results.append(TaskResult(name: name, category: category, passed: ok, detail: detail, durationMs: Int(Date().timeIntervalSince(t0) * 1000)))
     print("[\(ok ? "PASS" : "FAIL")] \(name) — \(detail.prefix(200))")
 }
-func resetCounter() async { _ = await run([.selectMenu(path: ["Fixture", "Reset Counter"])]) }
+func resetCounter() async { _ = await run([.selectMenu(path: ["Fixture", "Set Counter to Zero"])]) }
 
 // ---- Safe tasks ----
 await task("click increment") { await resetCounter(); let r = await run([.click(q("incrementButton"))]); return (allOK(r) && count(await observe()) == 1, describe(r)) }
 await task("click increment twice") { await resetCounter(); let r = await run([.click(q("incrementButton")), .click(q("incrementButton"))]); return (allOK(r) && count(await observe()) == 2, describe(r)) }
-await task("menu reset counter") { _ = await run([.click(q("incrementButton"))]); let r = await run([.selectMenu(path: ["Fixture", "Reset Counter"])]); return (allOK(r) && count(await observe()) == 0, describe(r)) }
+await task("menu reset counter") { _ = await run([.click(q("incrementButton"))]); let r = await run([.selectMenu(path: ["Fixture", "Set Counter to Zero"])]); return (allOK(r) && count(await observe()) == 0, describe(r)) }
 await task("shortcut cmd+R resets") { _ = await run([.click(q("incrementButton"))]); let r = await run([.pressKeys(KeyCombo(key: "r", modifiers: [.command]))]); return (allOK(r) && count(await observe()) == 0, describe(r)) }
 await task("submenu add ten") { await resetCounter(); let r = await run([.selectMenu(path: ["Fixture", "Counter", "Add Ten"])]); return (allOK(r) && count(await observe()) == 10, describe(r)) }
 await task("type name") { let r = await run([.typeText(q("nameField"), text: "Alice")]); return (allOK(r) && value("nameField", await observe()) == "Alice", describe(r)) }

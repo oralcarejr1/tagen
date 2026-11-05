@@ -68,6 +68,7 @@ public final class ModelActionPlanner: ActionPlanner, @unchecked Sendable {
         let req = ChatRequest(system: PromptLibrary.systemPrompt, messages: messages.current + [user], maxTokens: 4000, purpose: .computerUse)
         var final: ChatResponse?
         for try await ev in models.stream(req) { if case .completed(let r) = ev { final = r } }
+        try Task.checkCancellation()
         guard let r = final else { throw ModelError.decoding("planner: no response") }
         messages.withLock { $0.append(user); $0.append(r.message) }
         return ActionParser.parse(r.text, observation: observation)
