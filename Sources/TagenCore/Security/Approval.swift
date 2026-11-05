@@ -18,9 +18,38 @@ public struct ApprovalRequest: Sendable, Equatable, Identifiable {
     public var risk: RiskLevel
     public var reasons: [String]
     public var source: String
-    public init(id: UUID = UUID(), kind: ApprovalKind, title: String, detail: String, risk: RiskLevel, reasons: [String] = [], source: String) {
+    /// Korean rendering of title/detail/reasons (English fields above stay canonical for logs and audit).
+    public var korean: ApprovalText?
+    public init(id: UUID = UUID(), kind: ApprovalKind, title: String, detail: String, risk: RiskLevel, reasons: [String] = [], source: String,
+                korean: ApprovalText? = nil) {
         self.id = id; self.kind = kind; self.title = title; self.detail = detail; self.risk = risk; self.reasons = reasons; self.source = source
+        self.korean = korean
     }
+
+    /// Text to show in the approval card for the UI language (falls back to English).
+    public func text(_ lang: LanguageCode) -> ApprovalText {
+        if lang == .korean, let k = korean { return k }
+        return ApprovalText(title: title, detail: detail, reasons: reasons)
+    }
+
+    public func sourceName(_ lang: LanguageCode) -> String {
+        let ko = lang == .korean
+        switch source {
+        case "computer-use": return ko ? "컴퓨터 사용" : "Computer use"
+        case "act": return "Act"
+        case "codex": return "Codex"
+        case "claude-code": return "Claude Code"
+        case "selection": return ko ? "선택 텍스트" : "Selected text"
+        default: return source
+        }
+    }
+}
+
+public struct ApprovalText: Sendable, Equatable {
+    public var title: String
+    public var detail: String
+    public var reasons: [String]
+    public init(title: String, detail: String, reasons: [String]) { self.title = title; self.detail = detail; self.reasons = reasons }
 }
 
 public enum ApprovalDecision: Sendable, Equatable {

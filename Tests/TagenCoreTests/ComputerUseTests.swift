@@ -35,6 +35,62 @@ final class ActionPolicyTests: XCTestCase {
         XCTAssertTrue(ActionPolicy(autoApproveUpTo: .low).assess(.typeText(q, text: "hi"), element: el("nameField"), observation: obs(), scopeBundleID: nil).requiresApproval)
     }
 
+    func testKoreanReasonsAlignWithEnglish() {
+        let q = ElementTarget.query(ElementQuery(identifier: "x"))
+        let cases: [(GUIAction, AXElementSnapshot?, GUIObservation)] = [
+            (.click(q), btn("Delete"), obs()), (.click(q), btn("Buy now"), obs()), (.click(q), nil, obs()),
+            (.typeText(q, text: "sk-ant-api03-abcdefghijklmnopqrst", submit: true), el("passwordField"), obs(bundle: "com.apple.Terminal")),
+            (.pressKeys(KeyCombo(key: "q", modifiers: [.command])), nil, obs()), (.selectMenu(path: ["File", "Quit"]), nil, obs()),
+            (.focusApp("com.apple.keychainaccess"), nil, obs()), (.click(q), btn("OK"), obs(bundle: "com.apple.systempreferences", title: "Privacy")),
+        ]
+        for (a, e, o) in cases {
+            let r = policy.assess(a, element: e, observation: o, scopeBundleID: "dev.tagen.Fixture")
+            XCTAssertFalse(r.reasons.isEmpty, a.name)
+            XCTAssertEqual(r.reasonsKO.count, r.reasons.count, a.name)
+            XCTAssertEqual(r.reasons(.korean), r.reasonsKO)
+            XCTAssertEqual(r.reasons(.english), r.reasons)
+            for k in r.reasonsKO { XCTAssertNotNil(k.range(of: "\\p{Hangul}", options: .regularExpression), "untranslated: \(k)") }
+        }
+    }
+
+    func testApprovalCardShowsPlainLanguageNotAXIds() {
+        let del = AXElementSnapshot(id: "w0.4.2", role: "AXButton", title: "삭제")
+        let o = GUIObservation(app: AppInfo(name: "Mail", bundleID: "com.apple.mail", pid: 1),
+                               window: WindowInfo(title: "받은편지함", frame: .zero), root: del, layout: Fixtures.layout)
+        let a = GUIAction.click(.element(id: "w0.4.2", observationID: o.id))
+        let req = ActionExecutor.approvalRequest(a, element: del, observation: o, assessment: policy.assess(a, element: del, observation: o, scopeBundleID: nil))
+        let ko = req.text(.korean), en = req.text(.english)
+        XCTAssertEqual(ko.title, "'삭제' 클릭")
+        XCTAssertEqual(en.title, "Click \"삭제\"")
+        XCTAssertEqual(ko.detail, "Mail — 받은편지함 — 대상: 버튼 '삭제'")
+        XCTAssertEqual(en.detail, "In Mail — 받은편지함 — target: button \"삭제\"")
+        for t in [ko.title, ko.detail, en.title, en.detail] { XCTAssertFalse(t.contains("AX") || t.contains("w0.4.2"), t) }
+        XCTAssertEqual(ko.reasons, ["파괴적 동작 \"삭제\""])
+        XCTAssertEqual(req.reasons, ["destructive control \"삭제\""], "canonical English reasons kept for audit")
+        XCTAssertEqual(req.sourceName(.korean), "컴퓨터 사용")
+        XCTAssertEqual(req.risk, .high)
+        // Secure field is flagged; requests without Korean text fall back to English.
+        let pw = AXElementSnapshot(id: "p", role: "AXSecureTextField", placeholder: "Password")
+        let t = GUIAction.typeText(.element(id: "p", observationID: o.id), text: "x")
+        let r2 = ActionExecutor.approvalRequest(t, element: pw, observation: o, assessment: policy.assess(t, element: pw, observation: o, scopeBundleID: nil))
+        XCTAssertEqual(r2.text(.korean).detail, "Mail — 받은편지함 — 대상: 암호 필드 'Password' (보안 필드)")
+        XCTAssertEqual(r2.text(.korean).title, "'Password'에 'x' 입력 (기존 내용 교체)")
+        let plain = ApprovalRequest(kind: .agentTool, title: "T", detail: "D", risk: .low, source: "codex")
+        XCTAssertEqual(plain.text(.korean), ApprovalText(title: "T", detail: "D", reasons: []))
+    }
+
+    func testAXRoleNamesAndLocalizedSummaries() {
+        XCTAssertEqual(AXRoleName.friendly("AXPopUpButton", .korean), "팝업 메뉴")
+        XCTAssertEqual(AXRoleName.friendly("AXSomethingNew", .english), "somethingnew")
+        XCTAssertEqual(AXRoleName.describe(role: "AXLink", name: nil, .english), "link")
+        let p = GUIAction.click(.point(Point(x: 10.4, y: 20), observationID: UUID()), button: .right)
+        XCTAssertEqual(p.summary(.korean, targetName: nil), "화면 좌표 (10, 20) 우클릭")
+        XCTAssertEqual(GUIAction.click(.query(ElementQuery(role: "Button")), count: 2).summary(.english, targetName: nil), "Double-click button")
+        XCTAssertEqual(GUIAction.selectMenu(path: ["파일", "내보내기"]).summary(.korean, targetName: nil), "메뉴 파일 › 내보내기 선택")
+        XCTAssertEqual(GUIAction.scroll(nil, direction: .down, amount: 2).summary(.korean, targetName: nil), "아래로 2번 스크롤")
+        XCTAssertEqual(GUIAction.pressKeys(KeyCombo(key: "s", modifiers: [.command])).summary(.korean, targetName: nil), "⌘S 누르기")
+    }
+
     func testKeyComboParsing() {
         XCTAssertEqual(KeyCombo.parse("cmd+shift+s"), KeyCombo(key: "s", modifiers: [.command, .shift]))
         XCTAssertEqual(KeyCombo.parse("⌘⇧S"), KeyCombo(key: "s", modifiers: [.command, .shift]))

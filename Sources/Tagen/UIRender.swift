@@ -3,6 +3,7 @@ import AppKit
 import SwiftUI
 import TagenCore
 import TagenAgents
+import TagenMac
 
 /// `Tagen --render-ui <dir>`: renders the main UI states to PNG files (for CI visual review).
 @MainActor
@@ -46,9 +47,14 @@ enum UIRender {
             c.state.input = ko ? "받은편지함의 스팸을 정리해 줘" : "Clean up spam in my inbox"
             c.state.response = ""
             c.state.actLog = ["▶︎ " + (ko ? "받은편지함 정리" : "Clean inbox") + " [com.apple.mail]", "→ Click [w0.4.2]", "   verify: UI changed after click"]
-            c.state.enqueueApproval(ApprovalRequest(kind: .guiAction, title: ko ? "‘삭제’ 클릭" : "Click “Delete”",
-                                                    detail: ko ? "Mail — 받은편지함 — 대상: AXButton 삭제" : "In Mail — Inbox — target: AXButton Delete",
-                                                    risk: .high, reasons: [ko ? "파괴적 동작 \"삭제\"" : "destructive control \"delete\""], source: "computer-use")) { _ in }
+            // Built by the real executor helper + policy so the screenshot shows what users will see.
+            let delBtn = AXElementSnapshot(id: "w0.4.2", role: "AXButton", title: ko ? "삭제" : "Delete", frame: Rect(x: 300, y: 80, width: 60, height: 24))
+            let obs = GUIObservation(app: AppInfo(name: "Mail", bundleID: "com.apple.mail", pid: 1),
+                                     window: WindowInfo(title: ko ? "받은편지함" : "Inbox", frame: Rect(x: 0, y: 0, width: 900, height: 600)),
+                                     root: delBtn, layout: MacDisplays.layout())
+            let act = GUIAction.click(.element(id: "w0.4.2", observationID: obs.id))
+            let assessment = ActionPolicy().assess(act, element: delBtn, observation: obs, scopeBundleID: "com.apple.mail")
+            c.state.enqueueApproval(ActionExecutor.approvalRequest(act, element: delBtn, observation: obs, assessment: assessment)) { _ in }
             await settle(); if png(p.contentView!, to: out.appendingPathComponent("panel-act-approval-\(suffix).png")) { written.append("panel-act-approval-\(suffix).png") }
             c.state.approvals = []
 

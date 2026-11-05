@@ -57,17 +57,17 @@ struct ApprovalBanner: View {
                 HStack {
                     Image(systemName: a.request.risk >= .high ? "exclamationmark.octagon.fill" : "hand.raised.fill")
                         .foregroundStyle(a.request.risk >= .high ? .red : .orange)
-                    Text(a.request.title).font(.headline)
+                    Text(a.request.text(state.lang).title).font(.headline)
                     Spacer()
                     Text("\(state.t("Risk", "위험도")): \(a.request.risk.displayName(state.lang))").font(.caption).padding(4)
                         .background((a.request.risk >= .high ? Color.red : Color.orange).opacity(0.2), in: Capsule())
                 }
-                Text(a.request.detail).font(.system(.callout, design: .monospaced)).lineLimit(6).textSelection(.enabled)
-                if !a.request.reasons.isEmpty {
-                    Text(a.request.reasons.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
+                Text(a.request.text(state.lang).detail).font(.callout).lineLimit(6).textSelection(.enabled)
+                if !a.request.text(state.lang).reasons.isEmpty {
+                    Text(a.request.text(state.lang).reasons.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
-                    Text(a.request.source).font(.caption2).foregroundStyle(.secondary)
+                    Text(a.request.sourceName(state.lang)).font(.caption2).foregroundStyle(.secondary)
                     if state.approvals.count > 1 { Text("+\(state.approvals.count - 1)").font(.caption2) }
                     Spacer()
                     Button(state.t("Deny", "거부")) { state.resolveApproval(a.id, .denied(reason: "user denied")) }

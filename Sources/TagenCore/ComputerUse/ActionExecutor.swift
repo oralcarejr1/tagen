@@ -102,10 +102,7 @@ public struct ActionExecutor: Sendable {
             }
             if assessment.requiresApproval && !approvedOnce {
                 note(.authorize, "approval required (\(assessment.risk)): \(assessment.reasons.joined(separator: "; "))")
-                let decision = await approvals.request(ApprovalRequest(
-                    kind: .guiAction, title: action.summary,
-                    detail: "In \(obs.app?.name ?? "app") — \(obs.window?.title ?? "")" + (element.map { " — target: \($0.role) \($0.displayName ?? "")" } ?? ""),
-                    risk: assessment.risk, reasons: assessment.reasons, source: "computer-use"))
+                let decision = await approvals.request(Self.approvalRequest(action, element: element, observation: obs, assessment: assessment))
                 guard decision.isApproved else {
                     if case .denied(let r) = decision { note(.authorize, "denied: \(r)"); return StepReport(action: action, outcome: .denied(reason: r), attempts: attempt, risk: risk, trace: trace, observationAfter: obs) }
                     return StepReport(action: action, outcome: .denied(reason: "denied"), attempts: attempt, risk: risk, trace: trace)
@@ -173,6 +170,27 @@ public struct ActionExecutor: Sendable {
     }
 
     enum Identified { case success(AXElementSnapshot?), failure(String) }
+
+    /// Approval card text in English (canonical, audited) and Korean. Shows the element's role and name in plain
+    /// language instead of AX ids/roles so the user can tell what will actually be clicked.
+    public static func approvalRequest(_ action: GUIAction, element: AXElementSnapshot?, observation obs: GUIObservation,
+                                assessment: PolicyAssessment) -> ApprovalRequest {
+        func detail(_ lang: LanguageCode) -> String {
+            var parts = [obs.app?.name ?? (lang == .korean ? "앱" : "app")]
+            if let w = obs.window?.title, !w.isEmpty { parts.append(w) }
+            var s = (lang == .korean ? "" : "In ") + parts.joined(separator: " — ")
+            if let e = element {
+                s += (lang == .korean ? " — 대상: " : " — target: ") + AXRoleName.describe(role: e.role, name: e.displayName, lang)
+                if e.isSecure { s += lang == .korean ? " (보안 필드)" : " (secure field)" }
+            }
+            return s
+        }
+        let name = element?.displayName
+        return ApprovalRequest(kind: .guiAction, title: action.summary(.english, targetName: name), detail: detail(.english),
+                               risk: assessment.risk, reasons: assessment.reasons, source: "computer-use",
+                               korean: ApprovalText(title: action.summary(.korean, targetName: name), detail: detail(.korean),
+                                                    reasons: assessment.reasons(.korean)))
+    }
 
     func identify(_ target: ElementTarget?, in obs: GUIObservation, previous: GUIObservation?, action: GUIAction? = nil) -> Identified {
         guard let target else {

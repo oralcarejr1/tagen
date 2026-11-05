@@ -4,6 +4,9 @@ public struct PolicyAssessment: Sendable, Equatable {
     public var risk: RiskLevel
     public var reasons: [String]
     public var requiresApproval: Bool
+    /// Same reasons in Korean, index-aligned with `reasons`.
+    public var reasonsKO: [String] = []
+    public func reasons(_ lang: LanguageCode) -> [String] { lang == .korean && reasonsKO.count == reasons.count ? reasonsKO : reasons }
 }
 
 /// Classifies the impact of a GUI action. Content seen on screen never lowers risk; it can
@@ -45,55 +48,56 @@ public struct ActionPolicy: Sendable, Equatable {
     public func assess(_ action: GUIAction, element: AXElementSnapshot?, observation: GUIObservation, scopeBundleID: String?) -> PolicyAssessment {
         var risk: RiskLevel = .low
         var reasons: [String] = []
-        func raise(_ r: RiskLevel, _ why: String) { if r > risk { risk = r }; reasons.append(why) }
+        var reasonsKO: [String] = []
+        func raise(_ r: RiskLevel, _ why: String, _ ko: String) { if r > risk { risk = r }; reasons.append(why); reasonsKO.append(ko) }
 
         let bundle = observation.app?.bundleID ?? ""
-        if blockedBundleIDs.contains(bundle) { raise(.prohibited, "automation of \(bundle) is blocked (credential store)") }
+        if blockedBundleIDs.contains(bundle) { raise(.prohibited, "automation of \(bundle) is blocked (credential store)", "자격 증명 저장소(\(bundle))는 자동화할 수 없습니다") }
         if bundle == "com.apple.systempreferences" || bundle == "com.apple.Settings" {
             let wt = (observation.window?.title ?? "").lowercased()
-            if Self.containsAny(wt, Self.securityWords) != nil { raise(.prohibited, "security/privacy settings cannot be changed by automation") }
-            else { raise(.high, "changing system settings") }
+            if Self.containsAny(wt, Self.securityWords) != nil { raise(.prohibited, "security/privacy settings cannot be changed by automation", "보안·개인정보 설정은 자동화로 변경할 수 없습니다") }
+            else { raise(.high, "changing system settings", "시스템 설정 변경") }
         }
-        if let scope = scopeBundleID, !bundle.isEmpty, bundle != scope { raise(.high, "action outside the approved app (\(bundle))") }
+        if let scope = scopeBundleID, !bundle.isEmpty, bundle != scope { raise(.high, "action outside the approved app (\(bundle))", "승인된 앱 밖의 동작 (\(bundle))") }
 
         let elementText = [element?.title, element?.label, element?.help, element?.identifier].compactMap { $0 }.joined(separator: " ")
         let windowText = observation.window?.title ?? ""
 
         switch action {
         case .click(_, let button, _):
-            if let w = Self.containsAny(elementText, Self.destructiveWords) { raise(.high, "destructive control \"\(w)\"") }
-            if let w = Self.containsAny(elementText, Self.financialWords) { raise(.high, "purchase/payment control \"\(w)\"") }
-            if let w = Self.containsAny(elementText, Self.transmitWords) { raise(.high, "sends/publishes data \"\(w)\"") }
-            if let w = Self.containsAny(elementText, Self.securityWords) { raise(.high, "security-related control \"\(w)\"") }
-            if button == .right { raise(.low, "context menu") }
-            if element == nil { raise(.medium, "coordinate click without accessibility element") }
+            if let w = Self.containsAny(elementText, Self.destructiveWords) { raise(.high, "destructive control \"\(w)\"", "파괴적 동작 \"\(w)\"") }
+            if let w = Self.containsAny(elementText, Self.financialWords) { raise(.high, "purchase/payment control \"\(w)\"", "구매·결제 동작 \"\(w)\"") }
+            if let w = Self.containsAny(elementText, Self.transmitWords) { raise(.high, "sends/publishes data \"\(w)\"", "데이터 전송·게시 \"\(w)\"") }
+            if let w = Self.containsAny(elementText, Self.securityWords) { raise(.high, "security-related control \"\(w)\"", "보안 관련 동작 \"\(w)\"") }
+            if button == .right { raise(.low, "context menu", "컨텍스트 메뉴") }
+            if element == nil { raise(.medium, "coordinate click without accessibility element", "접근성 요소 없이 좌표로 클릭") }
         case .typeText(_, let text, _, let submit):
-            raise(.medium, "enters text")
-            if element?.isSecure == true { raise(.high, "typing into a secure (password) field") }
-            if Redactor().containsSecret(text) { raise(.high, "text looks like a credential or secret") }
-            if shellBundleIDs.contains(bundle) { raise(.high, "typing into a terminal (shell execution)") }
-            if submit { raise(.medium, "submits with Return") }
-            if submit, Self.containsAny(windowText, Self.financialWords) != nil { raise(.high, "submitting on a purchase/payment screen") }
+            raise(.medium, "enters text", "텍스트 입력")
+            if element?.isSecure == true { raise(.high, "typing into a secure (password) field", "보안(암호) 필드에 입력") }
+            if Redactor().containsSecret(text) { raise(.high, "text looks like a credential or secret", "입력 내용이 자격 증명·비밀 정보로 보임") }
+            if shellBundleIDs.contains(bundle) { raise(.high, "typing into a terminal (shell execution)", "터미널에 입력 (셸 실행)") }
+            if submit { raise(.medium, "submits with Return", "Return으로 제출") }
+            if submit, Self.containsAny(windowText, Self.financialWords) != nil { raise(.high, "submitting on a purchase/payment screen", "구매·결제 화면에서 제출") }
         case .pressKeys(let k):
-            raise(.medium, "keyboard shortcut \(k)")
-            if k.modifiers.contains(.command) && ["delete", "backspace"].contains(k.key) { raise(.high, "⌘⌫ deletes items") }
-            if k.modifiers.contains(.command) && k.key == "q" { raise(.high, "quits an application (possible data loss)") }
-            if shellBundleIDs.contains(bundle) && (k.key == "return" || k.key == "enter") { raise(.high, "executes a shell command") }
-            if k.modifiers.contains(.command) && k.modifiers.contains(.shift) && ["delete", "backspace"].contains(k.key) { raise(.high, "empties trash") }
+            raise(.medium, "keyboard shortcut \(k)", "단축키 \(k)")
+            if k.modifiers.contains(.command) && ["delete", "backspace"].contains(k.key) { raise(.high, "⌘⌫ deletes items", "⌘⌫ 항목 삭제") }
+            if k.modifiers.contains(.command) && k.key == "q" { raise(.high, "quits an application (possible data loss)", "앱 종료 (데이터 손실 가능)") }
+            if shellBundleIDs.contains(bundle) && (k.key == "return" || k.key == "enter") { raise(.high, "executes a shell command", "셸 명령 실행") }
+            if k.modifiers.contains(.command) && k.modifiers.contains(.shift) && ["delete", "backspace"].contains(k.key) { raise(.high, "empties trash", "휴지통 비우기") }
         case .selectMenu(let path):
-            raise(.medium, "menu command")
+            raise(.medium, "menu command", "메뉴 명령")
             let joined = path.joined(separator: " ")
-            if let w = Self.containsAny(joined, Self.destructiveWords) { raise(.high, "destructive menu item \"\(w)\"") }
-            if let w = Self.containsAny(joined, Self.financialWords + Self.transmitWords) { raise(.high, "menu item \"\(w)\"") }
-            if path.last?.lowercased().hasPrefix("quit") == true || path.last?.hasSuffix("종료") == true { raise(.high, "quits an application") }
+            if let w = Self.containsAny(joined, Self.destructiveWords) { raise(.high, "destructive menu item \"\(w)\"", "파괴적 메뉴 항목 \"\(w)\"") }
+            if let w = Self.containsAny(joined, Self.financialWords + Self.transmitWords) { raise(.high, "menu item \"\(w)\"", "주의가 필요한 메뉴 항목 \"\(w)\"") }
+            if path.last?.lowercased().hasPrefix("quit") == true || path.last?.hasSuffix("종료") == true { raise(.high, "quits an application", "앱 종료") }
         case .scroll:
             break
         case .focusApp(let a):
-            raise(.medium, "switches to \(a)")
-            if blockedBundleIDs.contains(a) { raise(.prohibited, "automation of \(a) is blocked") }
+            raise(.medium, "switches to \(a)", "\(a)(으)로 전환")
+            if blockedBundleIDs.contains(a) { raise(.prohibited, "automation of \(a) is blocked", "\(a) 자동화는 차단됨") }
         case .wait:
             break
         }
-        return PolicyAssessment(risk: risk, reasons: reasons, requiresApproval: risk > autoApproveUpTo)
+        return PolicyAssessment(risk: risk, reasons: reasons, requiresApproval: risk > autoApproveUpTo, reasonsKO: reasonsKO)
     }
 }
