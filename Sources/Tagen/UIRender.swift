@@ -63,9 +63,10 @@ enum UIRender {
             c.state.mode = .guide
             c.state.input = ko ? "설정 버튼이 어디 있어?" : "Where is the Settings button?"
             c.state.response = ko ? "오른쪽 위의 톱니바퀴 아이콘입니다. 화면에 화살표로 표시했어요." : "It's the gear icon at the top right — highlighted on screen."
+            c.state.selectionPreview = ko ? "분기 매출은 전년 대비 12% 증가했으며, 신규 고객 비중이 처음으로 40%를 넘었습니다." : "Quarterly revenue grew 12% year over year, and new customers passed 40% of the total for the first time."
             c.state.errorMessage = ko ? "음성에는 마이크와 음성 인식 권한이 필요합니다 (텍스트 입력은 계속 사용 가능)." : "Voice needs Microphone and Speech Recognition permission (text input still works)."
             await settle(); if png(p.contentView!, to: out.appendingPathComponent("panel-guide-\(suffix).png")) { written.append("panel-guide-\(suffix).png") }
-            c.state.errorMessage = nil
+            c.state.errorMessage = nil; c.state.selectionPreview = nil
 
             // 4. Agents tab
             c.state.tab = .agents

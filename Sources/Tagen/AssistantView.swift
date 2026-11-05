@@ -1,6 +1,8 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
 import TagenCore
+import TagenMac
 
 struct AssistantView: View {
     @EnvironmentObject var state: AppState
@@ -9,24 +11,23 @@ struct AssistantView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Picker("", selection: $state.mode) {
-                    Text("Ask").tag(AssistantMode.ask)
-                    Text("Guide").tag(AssistantMode.guide)
-                    Text("Act").tag(AssistantMode.act)
-                }
-                .pickerStyle(.segmented).labelsHidden().frame(width: 210)
-                Spacer()
-                VoiceButton()
-                Button { app?.askAboutRegion() } label: { Image(systemName: "viewfinder") }
-                    .help(state.t("Select a screen region (⌥⇧R)", "화면 영역 선택 (⌥⇧R)"))
-                Button { app?.newConversation() } label: { Image(systemName: "square.and.pencil") }
-                    .help(state.t("New conversation", "새 대화"))
+            // Wide panels show labelled tools; narrow ones fall back to icons (tooltips keep the names).
+            ViewThatFits(in: .horizontal) {
+                toolbar(labelled: true)
+                toolbar(labelled: false)
             }
+            Label(state.mode.blurb(state.lang), systemImage: state.mode.icon)
+                .font(.caption).foregroundStyle(.secondary)
+                .accessibilityIdentifier("modeDescription")
             if !state.missingForAsk.isEmpty {
-                Label(state.t("Accessibility permission is off — Tagen can only use screenshots/OCR. Open Settings › Permissions.",
-                              "손쉬운 사용 권한이 꺼져 있어 스크린샷/OCR만 사용합니다. 설정 › 권한을 확인하세요."), systemImage: "lock.trianglebadge.exclamationmark")
-                    .font(.caption).foregroundStyle(.orange)
+                HStack(spacing: 6) {
+                    Label(state.t("Accessibility permission is off — Tagen can only use screenshots/OCR.",
+                                  "손쉬운 사용 권한이 꺼져 있어 스크린샷/OCR만 사용합니다."), systemImage: "lock.trianglebadge.exclamationmark")
+                        .font(.caption).foregroundStyle(.orange)
+                    Spacer(minLength: 4)
+                    Button(state.t("Open Permissions", "권한 열기")) { app?.openSettings(tab: .permissions) }
+                        .controlSize(.small)
+                }
             }
             HStack(alignment: .bottom) {
                 TextField(placeholder, text: $state.input, axis: .vertical)
@@ -72,11 +73,62 @@ struct AssistantView: View {
         .onAppear { inputFocused = true }
     }
 
+    func toolbar(labelled: Bool) -> some View {
+        HStack {
+            Picker("", selection: $state.mode) {
+                ForEach(AssistantMode.allCases, id: \.self) { m in Text(m.title(state.lang)).tag(m) }
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(width: 220)
+            .accessibilityIdentifier("modePicker")
+            Spacer(minLength: 8)
+            VoiceButton(labelled: labelled)
+            Button { app?.askAboutRegion() } label: {
+                toolLabel(state.t("Region", "영역"), "viewfinder", labelled)
+            }
+            .help(state.t("Select a screen region and ask about it (⌥⇧R)", "화면 영역을 골라 질문 (⌥⇧R)"))
+            Button { app?.newConversation() } label: {
+                toolLabel(state.t("New", "새 대화"), "square.and.pencil", labelled)
+            }
+            .help(state.t("New conversation", "새 대화"))
+        }
+        .fixedSize(horizontal: labelled, vertical: false)
+    }
+
+    @ViewBuilder func toolLabel(_ title: String, _ icon: String, _ labelled: Bool) -> some View {
+        if labelled { Label(title, systemImage: icon).labelStyle(.titleAndIcon) } else { Image(systemName: icon) }
+    }
+
     var placeholder: String {
         switch state.mode {
         case .ask: return state.t("Ask about your screen…", "화면에 대해 질문하세요…")
         case .guide: return state.t("What are you looking for? (e.g. where is Export?)", "무엇을 찾나요? (예: 내보내기 버튼은 어디?)")
-        case .act: return state.t("Describe a task to perform (each risky step asks first)", "수행할 작업을 설명하세요 (위험한 단계는 먼저 묻습니다)")
+        case .act: return state.t("Describe a task to perform", "수행할 작업을 설명하세요")
+        }
+    }
+}
+
+extension AssistantMode {
+    func title(_ lang: LanguageCode) -> String {
+        switch self {
+        case .ask: return lang == .korean ? "질문" : "Ask"
+        case .guide: return lang == .korean ? "안내" : "Guide"
+        case .act: return lang == .korean ? "실행" : "Act"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .ask: return "questionmark.bubble"
+        case .guide: return "scope"
+        case .act: return "hand.tap"
+        }
+    }
+    /// One line telling the user what this mode will (and won't) do.
+    func blurb(_ lang: LanguageCode) -> String {
+        let ko = lang == .korean
+        switch self {
+        case .ask: return ko ? "화면을 읽고 답합니다. 아무것도 클릭하지 않습니다." : "Reads your screen and answers. Never clicks anything."
+        case .guide: return ko ? "찾는 버튼이나 메뉴를 화면 위에 표시해 줍니다." : "Highlights the button or menu you're looking for, right on screen."
+        case .act: return ko ? "작업을 대신 수행합니다. 위험한 단계는 먼저 묻습니다." : "Does the task for you. Risky steps ask first."
         }
     }
 }
@@ -111,8 +163,50 @@ struct SelectionActionsBar: View {
     @Environment(\.appController) var app
     @State private var custom = ""
     var body: some View {
+        Group {
+            if let sel = state.selectionPreview {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label { Text("“\(Self.preview(sel))”").lineLimit(1).truncationMode(.tail) } icon: { Image(systemName: "text.quote") }
+                        .font(.caption).foregroundStyle(.secondary)
+                        .help(String(sel.prefix(500)))
+                    actions
+                }
+            } else {
+                HStack(spacing: 4) {
+                    Label(state.t("Select text in another app to explain, summarize, translate or rewrite it.",
+                                  "다른 앱에서 텍스트를 선택하면 설명·요약·번역·다시 쓰기를 쓸 수 있습니다."), systemImage: "text.cursor")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    Button { Self.refresh(state) } label: { Image(systemName: "arrow.clockwise") }
+                        .buttonStyle(.borderless).controlSize(.small)
+                        .help(state.t("Check the selection again", "선택 텍스트 다시 확인"))
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { n in
+            if n.object is AssistantPanel { Self.refresh(state) }
+        }
+    }
+
+    /// First line-ish of the selection, whitespace collapsed.
+    static func preview(_ s: String) -> String {
+        let flat = s.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        return flat.count > 80 ? String(flat.prefix(80)) + "…" : flat
+    }
+
+    /// Peeks at the frontmost app's selection off the main thread (AX calls can block up to 1 s).
+    /// Skipped without Accessibility permission, and when Tagen itself is frontmost (its own fields).
+    static func refresh(_ state: AppState) {
+        guard state.permissions[.accessibility]?.isGranted == true,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        else { state.selectionPreview = nil; return }
+        Task {
+            let text = await Task.detached { AXInspector.selectedText()?.text }.value
+            state.selectionPreview = text
+        }
+    }
+
+    var actions: some View {
         HStack(spacing: 6) {
-            Text(state.t("Selection:", "선택 텍스트:")).font(.caption).foregroundStyle(.secondary)
             Button(state.t("Explain", "설명")) { app?.runSelection(.explain) }
             Button(state.t("Summarize", "요약")) { app?.runSelection(.summarize) }
             Button(state.t("Translate", "번역")) { app?.runSelection(.translate(to: nil)) }
@@ -148,7 +242,13 @@ struct ContextChip: View {
 struct VoiceButton: View {
     @EnvironmentObject var state: AppState
     @Environment(\.appController) var app
+    /// Wide layout spells out what the button does and which language it listens for.
+    var labelled = false
     @State private var pressed = false
+    var languageText: String {
+        let ko = state.settings.voice.recognitionLanguage == .korean
+        return labelled ? state.t("Talk", "말하기") + " · " + (ko ? state.t("Korean", "한국어") : state.t("English", "영어")) : (ko ? "KO" : "EN")
+    }
     var body: some View {
         let (icon, color): (String, Color) = {
             switch state.voiceState {
@@ -162,7 +262,7 @@ struct VoiceButton: View {
         HStack(spacing: 4) {
             Image(systemName: icon).foregroundStyle(color)
             if case .listening(let p) = state.voiceState, !p.isEmpty { Text(p).font(.caption).lineLimit(1).frame(maxWidth: 160) }
-            Text(state.settings.voice.recognitionLanguage == .korean ? "KO" : "EN").font(.caption2).foregroundStyle(.secondary)
+            Text(languageText).font(.caption2).foregroundStyle(.secondary)
         }
         .padding(6).background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
         .gesture(DragGesture(minimumDistance: 0)

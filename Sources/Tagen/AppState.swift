@@ -28,6 +28,9 @@ final class AppState: ObservableObject {
     @Published var context: ContextSummary?
     @Published var guidanceNotes: [String] = []
     @Published var replacement: ReplacementProposal?
+    /// Text currently selected in the frontmost app, peeked when the panel becomes key. Display only;
+    /// never stored or sent (selection actions re-read the selection when they run).
+    @Published var selectionPreview: String?
     @Published var approvals: [PendingApproval] = []
     @Published var voiceState: VoiceState = .idle
     @Published var actLog: [String] = []
