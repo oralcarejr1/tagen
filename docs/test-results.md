@@ -30,7 +30,21 @@ Defect found by this level and fixed: screenshot downscale truncated 1568→1567
 ## L3 — Packaged app on CI
 Run 9: `scripts/macos/package-app.sh` ✔ (ad-hoc signed, hardened runtime), `verify-bundle.sh` ✔ (Info.plist keys,
 `codesign --verify --deep --strict`, audio-input entitlement), `Tagen --self-test` ✔ (all checks pass; it includes
-the panel-open latency check with a <250 ms median threshold — see SELF-TEST below).
+the panel-open latency check with a <250 ms median threshold).
+
+Measured by `Tagen --self-test` on the packaged app (run for commit 2cf642f, run id 41950800890):
+| Check | Result |
+|---|---|
+| Assistant panel open latency (n=21) | **median 0.3 ms**, first (cold, SwiftUI build) 143 ms, max 143 ms — target < 250 ms |
+| Overlay render (arrow + label) | 21.7 ms |
+| Persistence + redaction, settings round-trip, model router, display layout | pass |
+| Permissions reported by the runner | screenCapture, accessibility, microphone = granted; speechRecognition = notDetermined |
+| Agent CLI discovery | `claude`, `codex` not installed on the runner (expected) |
+| Approval relay helper bundled | `Tagen.app/Contents/MacOS/tagen-approval-mcp` present |
+| Self-test wall time (process launch → exit) | 1018 ms |
+
+Note: panel latency is measured from the `showPanel` call to `displayIfNeeded()` returning (window ordered front and
+drawn); it excludes hotkey delivery time.
 
 ## L4 — Live GUI automation on the CI runner (real AX + CGEvent, TagenFixture)
 The GitHub runner's session already allows Accessibility and Screen Recording for processes started by the runner
