@@ -1,0 +1,12 @@
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+DerivedData/
+dist/
+*.o
+.DS_Store
+# never commit credentials
+*.p12
+*.mobileprovision
+.env
+extra.crt
