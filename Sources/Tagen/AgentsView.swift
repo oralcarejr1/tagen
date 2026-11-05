@@ -168,6 +168,9 @@ struct HistoryView: View {
                 HStack {
                     Text(state.t("Screenshots and audio are never stored.", "스크린샷과 음성은 저장하지 않습니다.")).font(.caption2).foregroundStyle(.secondary)
                     Spacer()
+                    if let id = selected {
+                        Button(state.t("Continue this conversation", "이 대화 이어가기")) { app?.continueConversation(id) }
+                    }
                     Button(state.t("Delete all history", "모든 기록 삭제"), role: .destructive) { app?.deleteAllHistory() }
                 }.padding(8)
             }

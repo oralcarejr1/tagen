@@ -164,6 +164,8 @@ struct SettingsView: View {
                 Text(state.t("Medium (typing, menus, shortcuts)", "중간 (입력, 메뉴, 단축키)")).tag(RiskLevel.medium)
             }
             Stepper(state.t("Max steps per task: ", "작업당 최대 단계: ") + "\(draft.computerUseMaxSteps)", value: $draft.computerUseMaxSteps, in: 3...50)
+            Stepper(state.t("Model token budget per task: ", "작업당 모델 토큰 한도: ") + "\(draft.computerUseTokenBudget / 1000)K",
+                    value: $draft.computerUseTokenBudget, in: 50_000...2_000_000, step: 50_000)
             Text(state.t("High-risk steps (delete, purchase, send, security settings, secrets, terminal) always ask. Password managers and privacy settings are never automated.",
                          "삭제·구매·전송·보안 설정·비밀 정보·터미널 같은 고위험 단계는 항상 확인합니다. 암호 관리자와 개인정보 설정은 자동화하지 않습니다.")).font(.caption)
             Button(state.t("Save", "저장")) { save() }.buttonStyle(.borderedProminent)

@@ -283,7 +283,7 @@ final class AppController {
             screenshotProvider = { obs in await driver.captureWindow(obs) }
         }
         let planner = ModelActionPlanner(models: router, screenshotProvider: screenshotProvider)
-        var cfg = ComputerUseConfig(); cfg.maxSteps = settings.computerUseMaxSteps
+        var cfg = ComputerUseConfig(); cfg.maxSteps = settings.computerUseMaxSteps; cfg.maxModelTokens = settings.computerUseTokenBudget
         let session = ComputerUseSession(goal: goal, scopeBundleID: scope, planner: planner, executor: executor, config: cfg)
         let broker = self.broker!
         actTask = Task { [weak self] in
@@ -463,6 +463,20 @@ final class AppController {
     }
 
     func openConversation(_ id: UUID) { state.historyMessages = (try? store?.messages(conversationID: id)) ?? [] }
+
+    /// Continue a past conversation from the History tab.
+    func continueConversation(_ id: UUID) {
+        let orch = orchestrator
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let n = try await orch.resumeConversation(recordID: id)
+                self.state.response = ""; self.state.context = nil; self.state.input = ""
+                self.state.tab = .assistant; self.state.mode = .ask
+                self.state.status = self.state.t("Continuing a conversation with \(n) earlier messages.", "이전 메시지 \(n)개가 있는 대화를 이어갑니다.")
+            } catch { self.state.errorMessage = "\(error)" }
+        }
+    }
 
     func deleteAllHistory() { try? store?.deleteAllHistory(); state.historyMessages = []; loadHistory() }
 

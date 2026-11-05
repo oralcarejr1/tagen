@@ -67,6 +67,49 @@ final class WorkflowTests: XCTestCase {
         XCTAssertFalse(PermissionGate.evaluate(.computerUse, states: [.accessibility: .denied]).available)
     }
 
+    func testActTaskStopsAtTokenBudget() async {
+        let model = ScriptedModel(Array(repeating: #"{"action":{"type":"scroll","direction":"down"}}"#, count: 10))
+        var cfg = ExecutorConfig(); cfg.settleDelay = 0; cfg.pollInterval = 0.001; cfg.verifyTimeout = 0.05
+        let stop = EmergencyStop()
+        let ex = ActionExecutor(driver: SimulatedGUIDriver(), policy: ActionPolicy(), approvals: ApprovalBroker(presenter: nil, stop: stop), config: cfg, stop: stop)
+        let planner = BudgetPlanner(perStep: 150_000)
+        var c = ComputerUseConfig(); c.maxModelTokens = 400_000
+        var last: ComputerUseEvent?
+        for await e in ComputerUseSession(goal: "g", scopeBundleID: nil, planner: planner, executor: ex, config: c).run() { last = e }
+        guard case .failed(let m)? = last else { return XCTFail("\(String(describing: last))") }
+        XCTAssertTrue(m.contains("token budget"), m)
+        XCTAssertEqual(planner.calls.current, 3, "stops on the step that crosses the budget")
+        _ = model
+    }
+
+    func testModelPlannerCountsTokens() async throws {
+        let model = ScriptedModel([#"{"action":{"type":"done","summary":"ok"}}"#])
+        let p = ModelActionPlanner(models: model)
+        _ = try await p.nextStep(goal: "g", observation: try await SimulatedGUIDriver().observe(scopeBundleID: nil), history: [])
+        XCTAssertEqual(p.tokensUsed, 0, "scripted model reports zero usage")
+    }
+
+    func testResumeConversationFromHistory() async throws {
+        let store = try AppStore.inMemory()
+        let first = AssistantOrchestrator(contextProvider: FakeContextProvider(fixtureContext()), models: ScriptedModel(["The count is zero."]), store: store, stop: EmergencyStop())
+        for try await _ in await first.ask("What is the count?", mode: .ask) {}
+        let rec = try XCTUnwrap(store.conversations().first)
+        // App restarts: a new orchestrator continues the stored conversation.
+        let model = ScriptedModel(["Click Increment."])
+        let o = AssistantOrchestrator(contextProvider: FakeContextProvider(fixtureContext()), models: model, store: store, stop: EmergencyStop())
+        let restored = try await o.resumeConversation(recordID: rec.id)
+        XCTAssertEqual(restored, 2)
+        for try await _ in await o.ask("How do I raise it?", mode: .ask) {}
+        let sent = model.requests.current[0].messages
+        XCTAssertEqual(sent.count, 1, "fresh model context (no fabricated earlier turns)")
+        XCTAssertTrue(sent[0].text.contains("earlier_conversation_restored_from_history"))
+        XCTAssertTrue(sent[0].text.contains("User: What is the count?"))
+        XCTAssertEqual(try store.messages(conversationID: rec.id).count, 4, "new turns appended to the same record")
+        // The transcript is sent once; the next follow-up relies on the live context.
+        for try await _ in await o.ask("And then?", mode: .ask) {}
+        XCTAssertFalse(model.requests.current[1].messages.last!.text.contains("earlier_conversation_restored_from_history"))
+    }
+
     /// Stability: 100 mixed sessions (ask, guide, selection, act, cancel) without crashes or leaks of state.
     func testHundredMixedSessionsStable() async throws {
         var completed = 0, stopped = 0
@@ -97,6 +140,18 @@ final class WorkflowTests: XCTestCase {
             }
         }
         XCTAssertEqual(completed, 80); XCTAssertEqual(stopped, 20)
+    }
+}
+
+/// Planner that reports a fixed token cost per step.
+final class BudgetPlanner: ActionPlanner, @unchecked Sendable {
+    let perStep: Int
+    let calls = Locked(0)
+    init(perStep: Int) { self.perStep = perStep }
+    var tokensUsed: Int { calls.current * perStep }
+    func nextStep(goal: String, observation: GUIObservation, history: [StepHistoryItem]) async throws -> PlannedStep {
+        calls.withLock { $0 += 1 }
+        return .action(.scroll(nil, direction: .down, amount: 1), rationale: "")
     }
 }
 

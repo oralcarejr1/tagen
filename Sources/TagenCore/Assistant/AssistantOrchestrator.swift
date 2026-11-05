@@ -70,6 +70,10 @@ public struct ConversationState: Sendable {
     public var id: UUID = UUID()
     public var recordID: UUID?
     public var messages: [ChatMessage] = []
+    /// Transcript of a conversation restored from history, sent once with the next question.
+    /// (Stored history has no screenshots or provider content, so it is replayed as plain text
+    /// in a fresh model context rather than as fake earlier turns.)
+    public var restoredTranscript: String?
     public var lastFingerprint: String?
     public var lastContext: ScreenContext?
     public init() {}
@@ -97,6 +101,20 @@ public actor AssistantOrchestrator {
     public func updateSettings(_ s: AssistantSettings) { settings = s }
 
     public func newConversation() { cancel(); conversation = ConversationState() }
+
+    /// Continue a stored conversation: new turns append to the same history record; the model
+    /// receives the earlier exchange as a text transcript with the next question.
+    public func resumeConversation(recordID: UUID) throws -> Int {
+        guard let store else { return 0 }
+        let msgs = try store.messages(conversationID: recordID)
+        cancel()
+        var c = ConversationState()
+        c.recordID = recordID
+        let lines = msgs.suffix(40).map { "\($0.role == .user ? "User" : "Assistant"): \($0.text)" }
+        c.restoredTranscript = lines.isEmpty ? nil : lines.joined(separator: "\n")
+        conversation = c
+        return msgs.count
+    }
 
     public func cancel() { currentTask?.cancel(); currentTask = nil }
 
@@ -182,7 +200,11 @@ public actor AssistantOrchestrator {
         if let img = pkg.image { parts.append(.image(data: img.data, mediaType: img.mediaType)) }
         let contextText = reuse ? "(Screen unchanged since the previous message.)" : pkg.text
         let instruction = mode == .guide ? PromptLibrary.guideInstruction(question: question) : PromptLibrary.askInstruction(question: question)
-        parts.append(.text(contextText + "\n\n" + instruction))
+        var prefix = ""
+        if let t = conversation.restoredTranscript {
+            prefix = PromptLibrary.wrapUntrusted(t, kind: "earlier_conversation_restored_from_history") + "\n\n"
+        }
+        parts.append(.text(prefix + contextText + "\n\n" + instruction))
         let userMsg = ChatMessage(role: .user, parts: parts)
 
         let request = ChatRequest(system: PromptLibrary.systemPrompt, messages: trimmedHistory() + [userMsg],
@@ -196,6 +218,7 @@ public actor AssistantOrchestrator {
 
         conversation.messages.append(userMsg)
         conversation.messages.append(response.message)
+        conversation.restoredTranscript = nil
         conversation.lastFingerprint = fp
         conversation.lastContext = ctx
         persist(question: question, answer: response.text, mode: mode, hadImage: pkg.image != nil)

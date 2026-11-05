@@ -12,6 +12,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var computerUseEnabled = true
     public var computerUseAutoApproveUpTo: RiskLevel = .medium
     public var computerUseMaxSteps = 20
+    public var computerUseTokenBudget = 400_000
     public var agentExecutionEnabled = false
     public var allowedProjectFolders: [String] = []
     public var agentDefaultProfile: AgentPermissionProfile = .askEveryTime
@@ -34,6 +35,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         computerUseEnabled = d(.computerUseEnabled, computerUseEnabled)
         computerUseAutoApproveUpTo = d(.computerUseAutoApproveUpTo, computerUseAutoApproveUpTo)
         computerUseMaxSteps = d(.computerUseMaxSteps, computerUseMaxSteps)
+        computerUseTokenBudget = d(.computerUseTokenBudget, computerUseTokenBudget)
         agentExecutionEnabled = d(.agentExecutionEnabled, agentExecutionEnabled)
         allowedProjectFolders = d(.allowedProjectFolders, allowedProjectFolders)
         agentDefaultProfile = d(.agentDefaultProfile, agentDefaultProfile)

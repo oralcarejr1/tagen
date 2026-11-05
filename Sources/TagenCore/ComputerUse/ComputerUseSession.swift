@@ -19,6 +19,12 @@ public struct StepHistoryItem: Sendable, Equatable {
 /// Decides the next GUI action from the goal and current observation.
 public protocol ActionPlanner: Sendable {
     func nextStep(goal: String, observation: GUIObservation, history: [StepHistoryItem]) async throws -> PlannedStep
+    /// Model tokens consumed so far by this planner (input incl. cache + output); 0 if not model-backed.
+    var tokensUsed: Int { get }
+}
+
+extension ActionPlanner {
+    public var tokensUsed: Int { 0 }
 }
 
 /// Deterministic planner that replays a fixed list (scripted automations / fixture tests).
@@ -44,6 +50,8 @@ public final class ModelActionPlanner: ActionPlanner, @unchecked Sendable {
     private let previous = Locked<GUIObservation?>(nil)
     /// Geometry of the screenshot most recently sent, for converting `image_point` targets.
     private let lastImage = Locked<CaptureGeometry?>(nil)
+    private let usage = Locked(0)
+    public var tokensUsed: Int { usage.current }
 
     public init(models: ModelStreaming, packager: ContextPackager = ContextPackager(options: .planner),
                 screenshotProvider: (@Sendable (GUIObservation) async -> CapturedImage?)? = nil, maxScreenshotRequestsPerStep: Int = 1) {
@@ -105,6 +113,7 @@ public final class ModelActionPlanner: ActionPlanner, @unchecked Sendable {
             try Task.checkCancellation()
             guard let r = final else { throw ModelError.decoding("planner: no response") }
             messages.withLock { $0.append(user); $0.append(r.message) }
+            usage.withLock { $0 += r.usage.inputTokens + r.usage.cacheReadTokens + r.usage.cacheWriteTokens + r.usage.outputTokens }
             if image != nil { lastImage.set(image?.geometry) }
             let step = ActionParser.parse(r.text, observation: observation, imageGeometry: lastImage.current)
             if case .requestScreenshot = step {
@@ -191,6 +200,8 @@ public struct ComputerUseConfig: Sendable, Equatable {
     public var maxSteps: Int = 20
     public var maxConsecutiveFailures: Int = 3
     public var taskTimeout: Double = 300
+    /// Upper bound on model tokens for one task (cost cap). 0 = unlimited.
+    public var maxModelTokens: Int = 400_000
     public init() {}
 }
 
@@ -236,6 +247,9 @@ public struct ComputerUseSession: Sendable {
             let step: PlannedStep
             do { step = try await planner.nextStep(goal: goal, observation: obs, history: history) }
             catch { return .failed("planner error: \(error)") }
+            if config.maxModelTokens > 0 && planner.tokensUsed > config.maxModelTokens {
+                return .failed("stopped: model token budget for this task exceeded (\(planner.tokensUsed) > \(config.maxModelTokens))")
+            }
             switch step {
             case .requestScreenshot: return .failed("planner requested a screenshot it could not get")
             case .done(let s): return .finished(summary: s)
