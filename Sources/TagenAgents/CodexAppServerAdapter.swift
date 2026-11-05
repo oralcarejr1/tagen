@@ -8,8 +8,8 @@ import TagenCore
 ///   ← server requests item/commandExecution/requestApproval, item/fileChange/requestApproval
 ///     (legacy: execCommandApproval, applyPatchApproval) answered with a decision
 ///   → turn/interrupt to cancel.
-/// Field names should be re-checked against `codex app-server generate-json-schema` for the
-/// installed Codex version (see docs/research/codex-claude-protocols.md).
+/// Verified against `codex app-server generate-ts` / `generate-json-schema` from codex-cli 0.166.0
+/// (see docs/research/codex-claude-protocols.md). Re-check when upgrading Codex.
 public struct CodexAppServerAdapter: CodingAgentAdapter {
     public var provider: AgentProvider { .codex }
     public let executable: String?
@@ -58,9 +58,11 @@ public struct CodexAppServerAdapter: CodingAgentAdapter {
                     if rpc.handleResponse(msg) { continue }
                     if let method = msg["method"]?.stringValue {
                         if let id = msg["id"] {
-                            let reply = await Self.handleServerRequest(method: method, params: msg["params"] ?? .null, spec: spec,
-                                                                       approvals: approvals, run: run)
-                            rpc.respond(id: id, result: reply)
+                            switch await Self.handleServerRequest(method: method, params: msg["params"] ?? .null, spec: spec,
+                                                                          approvals: approvals, run: run, session: session) {
+                            case .result(let r): rpc.respond(id: id, result: r)
+                            case .error(let code, let m): rpc.respondError(id: id, code: code, message: m)
+                            }
                         } else {
                             for e in Self.handleNotification(method: method, params: msg["params"] ?? .null, session: session) { run.emit(e) }
                             if session.turnFinished.current { run.process.closeStdin(); run.process.terminate(grace: 4) }
@@ -77,17 +79,24 @@ public struct CodexAppServerAdapter: CodingAgentAdapter {
         // Driver: handshake → thread → turn.
         Task {
             do {
-                _ = try await rpc.request("initialize", ["clientInfo": ["name": "tagen", "title": "Tagen", "version": .string(clientVersion)]])
+                _ = try await rpc.request("initialize", ["clientInfo": ["name": "tagen", "title": "Tagen", "version": .string(clientVersion)],
+                                                         "capabilities": .null])
                 rpc.notify("initialized", nil)
                 if let acct = try? await rpc.request("account/read", .object([:]), timeout: 10),
                    acct["requiresOpenaiAuth"]?.boolValue == true, acct["account"]?.isNull ?? true {
-                    run.fail(.authentication, "Codex is not signed in. Run `codex login` (or store an API key in Settings › Agents).")
-                    run.process.terminate(); return
+                    // Observed with codex 0.166: signed-out → {"account":null,"requiresOpenaiAuth":true}.
+                    // An API key passed via environment may not show up as an account, so only fail fast without one.
+                    if Self.hasEnvironmentCredential(environment) {
+                        run.emit(.log("Codex reports no stored login; using the API key from the environment"))
+                    } else {
+                        run.fail(.authentication, "Codex is not signed in. Run `codex login` (or store an API key in Settings › Agents).")
+                        run.process.terminate(); return
+                    }
                 }
                 let pol = Self.policy(spec.permissionProfile)
                 let threadResult: JSONValue
                 if let resume = spec.resumeSessionID {
-                    threadResult = try await rpc.request("thread/resume", ["threadId": .string(resume)])
+                    threadResult = try await rpc.request("thread/resume", ["threadId": .string(resume), "excludeTurns": true])
                 } else {
                     var p: [String: JSONValue] = ["cwd": .string(spec.workingDirectory), "approvalPolicy": .string(pol.approval), "sandbox": .string(pol.sandbox)]
                     if let m = spec.model, !m.isEmpty { p["model"] = .string(m) }
@@ -99,7 +108,8 @@ public struct CodexAppServerAdapter: CodingAgentAdapter {
                 }
                 session.threadID.set(tid)
                 run.emit(.session(tid))
-                let turnResult = try await rpc.request("turn/start", ["threadId": .string(tid), "input": [["type": "text", "text": .string(spec.prompt)]]])
+                let turnResult = try await rpc.request("turn/start", ["threadId": .string(tid),
+                                                                     "input": [["type": "text", "text": .string(spec.prompt), "text_elements": []]]])
                 if let turn = turnResult.at("turn", "id")?.stringValue { session.turnID.set(turn) }
             } catch let f as AgentFailure {
                 let kind: AgentFailureKind = AuthErrorDetector.isAuthError(f.message) ? .authentication : f.kind
@@ -113,13 +123,37 @@ public struct CodexAppServerAdapter: CodingAgentAdapter {
         return run
     }
 
-    static func handleServerRequest(method: String, params: JSONValue, spec: AgentTaskSpec, approvals: ApprovalBroker, run: ProcessAgentRun) async -> JSONValue {
+    static func hasEnvironmentCredential(_ env: [String: String]) -> Bool {
+        ["CODEX_API_KEY", "OPENAI_API_KEY"].contains { !(env[$0] ?? "").isEmpty }
+    }
+
+    enum ServerReply: Equatable { case result(JSONValue), error(Int, String) }
+
+    /// Decision payloads per app-server schema (codex 0.166):
+    ///  v2 command:  "accept" | "acceptForSession" | "decline" | "cancel"
+    ///  v2 file:     "accept" | "acceptForSession" | "decline" | "cancel"
+    ///  legacy:      "approved" | "approved_for_session" | {"denied":{"rejection":…}} | "abort"
+    static func decisionPayload(_ d: ApprovalDecision?, legacy: Bool, reason: String = "") -> JSONValue {
+        switch (d, legacy) {
+        case (.approved?, false): return ["decision": "accept"]
+        case (.approvedForTask?, false): return ["decision": "acceptForSession"]
+        case (_, false): return ["decision": "decline"]
+        case (.approved?, true): return ["decision": "approved"]
+        case (.approvedForTask?, true): return ["decision": "approved_for_session"]
+        case (_, true): return ["decision": ["denied": ["rejection": .string(reason.isEmpty ? "Denied in Tagen" : reason)]]]
+        }
+    }
+
+    static func handleServerRequest(method: String, params: JSONValue, spec: AgentTaskSpec, approvals: ApprovalBroker,
+                                    run: ProcessAgentRun, session: CodexSessionState) async -> ServerReply {
         let legacy = method == "execCommandApproval" || method == "applyPatchApproval"
-        let isCommand = method.contains("commandExecution") || method == "execCommandApproval"
-        let isFile = method.contains("fileChange") || method == "applyPatchApproval"
+        let isCommand = method == "item/commandExecution/requestApproval" || method == "execCommandApproval"
+        let isFile = method == "item/fileChange/requestApproval" || method == "applyPatchApproval"
         guard isCommand || isFile else {
-            run.emit(.log("unsupported server request \(method); declining"))
-            return legacy ? ["decision": "denied"] : ["decision": "decline"]
+            // e.g. item/tool/requestUserInput, mcpServer/elicitation/request, item/permissions/requestApproval:
+            // not supported by Tagen yet — answer with a JSON-RPC error instead of a malformed result.
+            run.emit(.log("unsupported server request \(method); replied with an error"))
+            return .error(-32601, "Tagen does not support \(method)")
         }
         let id = params["itemId"]?.stringValue ?? params["callId"]?.stringValue ?? UUID().uuidString
         var risk: RiskLevel
@@ -128,29 +162,34 @@ public struct CodexAppServerAdapter: CodingAgentAdapter {
         if isCommand {
             let cmd: String = params["command"]?.stringValue ?? (params["command"]?.arrayValue?.compactMap(\.stringValue).joined(separator: " ") ?? "")
             (risk, reasons) = CommandRisk.assess(command: cmd)
+            if params["kind"]?.stringValue == "writeStdin" { reasons.append("writes to a running process") }
             detail = Redactor().redact(cmd) + (params["cwd"]?.stringValue.map { "  (in \($0))" } ?? "")
         } else {
-            let paths = (params["changes"]?.objectValue.map { Array($0.keys) } ?? params["changes"]?.arrayValue?.compactMap { $0["path"]?.stringValue }) ?? []
+            // v2 file approvals carry no paths: they come from the fileChange item announced earlier.
+            let legacyPaths = params["fileChanges"]?.objectValue.map { Array($0.keys).sorted() } ?? []
+            let paths = legacy ? legacyPaths : (session.itemPaths.current[id] ?? [])
             let outside = paths.filter { !CommandRisk.isInside($0, spec.workingDirectory) }
             risk = outside.isEmpty ? .medium : .high
             reasons = outside.isEmpty ? ["edits files in the project"] : ["edits files outside the project"]
-            if params["grantRoot"]?.stringValue != nil { risk = .high; reasons.append("requests write access to a new root") }
+            if paths.isEmpty { risk = .high; reasons = ["file changes with unknown paths"] }
+            if let root = params["grantRoot"]?.stringValue { risk = .high; reasons.append("requests write access to \(root)") }
             detail = paths.isEmpty ? (params["reason"]?.stringValue ?? "file changes") : paths.joined(separator: ", ")
             if spec.permissionProfile == .autoEditsInProject && risk == .medium {
-                return legacy ? ["decision": "approved"] : ["decision": "accept"]
+                return .result(decisionPayload(.approved, legacy: legacy))
             }
         }
         if let why = params["reason"]?.stringValue { reasons.append("agent says: \(why)") }
         if spec.permissionProfile == .readOnly && isFile {
-            return legacy ? ["decision": "denied"] : ["decision": "decline"]
+            return .result(decisionPayload(.denied(reason: "read-only task"), legacy: legacy, reason: "Tagen: this task is read-only"))
         }
         run.emit(.approvalRequested(id: id, title: (isCommand ? "Run: " : "Edit: ") + detail, risk: risk))
         let decision = await approvals.request(ApprovalRequest(kind: isCommand ? .agentCommand : .agentFileChange,
                                                                title: isCommand ? "Codex wants to run a command" : "Codex wants to change files",
                                                                detail: detail, risk: risk, reasons: reasons, source: "codex"))
         run.emit(.approvalResolved(id: id, approved: decision.isApproved))
-        if legacy { return ["decision": decision.isApproved ? "approved" : "denied"] }
-        return ["decision": decision.isApproved ? "accept" : "decline"]
+        var why = ""
+        if case .denied(let r) = decision { why = "Denied in Tagen: \(r)" }
+        return .result(decisionPayload(decision, legacy: legacy, reason: why))
     }
 
     static func handleNotification(method: String, params: JSONValue, session: CodexSessionState) -> [AgentEvent] {
@@ -167,7 +206,10 @@ public struct CodexAppServerAdapter: CodingAgentAdapter {
         case "item/started":
             switch item["type"]?.stringValue {
             case "commandExecution": return [.toolStarted(id: itemID, name: "command", detail: Redactor().redact(Self.commandText(item)))]
-            case "fileChange": return [.toolStarted(id: itemID, name: "edit", detail: Self.paths(item).joined(separator: ", "))]
+            case "fileChange":
+                let ps = Self.paths(item)
+                session.itemPaths.withLock { $0[itemID] = ps }
+                return [.toolStarted(id: itemID, name: "edit", detail: ps.joined(separator: ", "))]
             case "mcpToolCall": return [.toolStarted(id: itemID, name: "mcp", detail: "\(item["server"]?.stringValue ?? "").\(item["tool"]?.stringValue ?? "")")]
             case "webSearch": return [.toolStarted(id: itemID, name: "web search", detail: item["query"]?.stringValue ?? "")]
             default: return []
@@ -230,6 +272,8 @@ final class CodexSessionState: Sendable {
     let lastMessage = Locked<String>("")
     let files = Locked<[String]>([])
     let turnFinished = Locked(false)
+    /// fileChange item id → paths (v2 file approvals reference the item instead of listing paths).
+    let itemPaths = Locked<[String: [String]]>([:])
 }
 
 /// JSON-RPC request/response correlation over a JSONLProcess.
@@ -276,6 +320,10 @@ final class JSONRPCPeer: @unchecked Sendable {
 
     func respond(id: JSONValue, result: JSONValue) {
         process.writeLine(JSONValue.object(["id": id, "result": result]).encoded())
+    }
+
+    func respondError(id: JSONValue, code: Int, message: String) {
+        process.writeLine(JSONValue.object(["id": id, "error": ["code": .number(Double(code)), "message": .string(message)]]).encoded())
     }
 
     /// Returns true if `msg` was a response to one of our requests.

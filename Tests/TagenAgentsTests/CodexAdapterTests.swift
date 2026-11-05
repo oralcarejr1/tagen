@@ -48,11 +48,43 @@ final class CodexAppServerAdapterTests: XCTestCase {
     func testLegacyApprovalVocabulary() async {
         let ev = await collect(await adapter("legacy").start(spec(), approvals: broker(.approved).0))
         XCTAssertEqual(ev.result?.finalText, "decision=approved")
+        let denied = await collect(await adapter("legacy").start(spec(), approvals: broker(.denied(reason: "no")).0))
+        XCTAssertEqual(denied.result?.finalText, "decision=denied", "legacy deny must be {\"denied\":{\"rejection\":…}}")
+        let task = await collect(await adapter("approval").start(spec(), approvals: broker(.approvedForTask).0))
+        XCTAssertEqual(task.result?.finalText, "decision=acceptForSession")
+    }
+
+    func testFileApprovalUsesPathsFromItemAndAsksOutsideAutoProfile() async {
+        let (b, p) = broker(.approved)
+        let ev = await collect(await adapter("fileapproval").start(spec(), approvals: b))
+        XCTAssertEqual(ev.result?.finalText, "decision=accept")
+        XCTAssertEqual(p.seen.current.first?.risk, .medium)
+        XCTAssertTrue(p.seen.current.first?.detail.hasSuffix("/a.swift") == true, "paths resolved from the fileChange item")
+    }
+
+    func testUnsupportedServerRequestGetsJSONRPCError() async {
+        let ev = await collect(await adapter("userinput").start(spec(), approvals: broker(.approved).0))
+        XCTAssertEqual(ev.result?.finalText, "error=-32601")
+    }
+
+    func testDecisionPayloadsMatchSchema() {
+        XCTAssertEqual(CodexAppServerAdapter.decisionPayload(.approved, legacy: false), ["decision": "accept"])
+        XCTAssertEqual(CodexAppServerAdapter.decisionPayload(.approvedForTask, legacy: false), ["decision": "acceptForSession"])
+        XCTAssertEqual(CodexAppServerAdapter.decisionPayload(.denied(reason: "x"), legacy: false), ["decision": "decline"])
+        XCTAssertEqual(CodexAppServerAdapter.decisionPayload(.approvedForTask, legacy: true), ["decision": "approved_for_session"])
+        XCTAssertEqual(CodexAppServerAdapter.decisionPayload(.denied(reason: "x"), legacy: true, reason: "nope"), ["decision": ["denied": ["rejection": "nope"]]])
     }
 
     func testAuthRequired() async {
-        let ev = await collect(await adapter("auth").start(spec(), approvals: broker(.approved).0))
+        var env = AgentFixtures.env("auth"); env["CODEX_API_KEY"] = nil; env["OPENAI_API_KEY"] = nil
+        let a = CodexAppServerAdapter(executable: AgentFixtures.path("fake_codex.py"), environment: env, requestTimeout: 10)
+        let ev = await collect(await a.start(spec(), approvals: broker(.approved).0))
         XCTAssertEqual(ev.failure?.kind, .authentication)
+        // With an API key in the environment the run proceeds despite no stored login.
+        env["CODEX_API_KEY"] = "sk-test"
+        let b = CodexAppServerAdapter(executable: AgentFixtures.path("fake_codex.py"), environment: env, requestTimeout: 10)
+        let ev2 = await collect(await b.start(spec(), approvals: broker(.approved).0))
+        XCTAssertEqual(ev2.result?.finalText, "Hello", "\(ev2)")
     }
 
     func testTurnFailureWith401IsAuth() async {
@@ -124,6 +156,10 @@ final class AgentInfrastructureTests: XCTestCase {
         XCTAssertEqual(m.credentialEnvironment(.claudeCode), ["CLAUDE_CODE_OAUTH_TOKEN": "tok"])
         XCTAssertTrue(m.credentialEnvironment(.codex).isEmpty)
         XCTAssertTrue(AgentAuthManager.loginCommand(.codex, executable: "/a b/codex").contains("'/a b/codex' login"))
+    }
+
+    func testANSIStrippedFromLogs() {
+        XCTAssertEqual(ProcessAgentRun.stripANSI("\u{1B}[2m2026\u{1B}[0m \u{1B}[31mERROR\u{1B}[0m x"), "2026 ERROR x")
     }
 
     func testAuthErrorDetector() {

@@ -17,7 +17,13 @@ public final class ProcessAgentRun: AgentRun, @unchecked Sendable {
     var isCancelled: Bool { state.current.cancelled }
     var sessionID: String? { state.current.session }
 
+    static let ansi = try! NSRegularExpression(pattern: "\u{1B}\\[[0-9;?]*[ -/]*[@-~]")
+    static func stripANSI(_ s: String) -> String {
+        ansi.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "")
+    }
+
     func emit(_ e: AgentEvent) {
+        if case .log(let l) = e, l.contains("\u{1B}") { emit(.log(Self.stripANSI(l))); return }
         if case .session(let s) = e { state.withLock { $0.session = s } }
         let shouldEmit = state.withLock { st -> Bool in
             if st.finished { return false }

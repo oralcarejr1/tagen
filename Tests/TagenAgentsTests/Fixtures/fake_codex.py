@@ -26,13 +26,22 @@ for line in sys.stdin:
     note(f"recv {method or 'response'}")
     if method is None:  # response to our server request
         if pending == mid:
+            if "error" in m:
+                finish_turn("error=" + str(m["error"]["code"])); continue
             decision = m["result"]["decision"]
+            valid = {"accept", "acceptForSession", "decline", "cancel", "approved", "approved_for_session", "abort"}
+            if isinstance(decision, dict):
+                assert set(decision) == {"denied"} and "rejection" in decision["denied"], decision
+                decision = "denied"
+            else:
+                assert decision in valid, decision
             note("decision " + decision)
             finish_turn("decision=" + decision)
         continue
     params = m.get("params") or {}
     if method == "initialize":
         assert params["clientInfo"]["name"] == "tagen"
+        assert "capabilities" in params, "InitializeParams.capabilities is required (nullable)"
         out({"id": mid, "result": {"userAgent": "fake-codex/0"}})
     elif method == "initialized":
         pass
@@ -46,11 +55,14 @@ for line in sys.stdin:
         out({"id": mid, "result": {"thread": {"id": thread_id}}})
         out({"method": "thread/started", "params": {"thread": {"id": thread_id}}})
     elif method == "thread/resume":
+        assert params.get("excludeTurns") is True, "use excludeTurns (full-history hydration is deprecated)"
         thread_id, resumed = params["threadId"], True
         out({"id": mid, "result": {"thread": {"id": thread_id}}})
     elif method == "turn/start":
         assert params["threadId"] == thread_id
-        prompt = params["input"][0]["text"]
+        inp = params["input"][0]
+        assert inp["type"] == "text" and isinstance(inp.get("text_elements"), list), "UserInput text requires text_elements"
+        prompt = inp["text"]
         out({"id": mid, "result": {"turn": {"id": turn_id, "status": "inProgress"}}})
         out({"method": "turn/started", "params": {"turn": {"id": turn_id}}})
         if scenario == "crash" and not resumed:
@@ -63,12 +75,18 @@ for line in sys.stdin:
         out({"method": "item/started", "params": {"item": {"type": "commandExecution", "id": "cmd1", "command": "ls", "status": "inProgress"}}})
         out({"method": "item/commandExecution/outputDelta", "params": {"itemId": "cmd1", "delta": "README.md\n"}})
         out({"method": "item/completed", "params": {"item": {"type": "commandExecution", "id": "cmd1", "command": "ls", "exitCode": 0, "status": "completed", "aggregatedOutput": "README.md\n"}}})
+        if scenario == "userinput":
+            pending = "srv-1"
+            out({"id": pending, "method": "item/tool/requestUserInput", "params": {"threadId": thread_id, "turnId": turn_id, "itemId": "q1", "questions": []}})
+            continue
         if scenario in ("approval", "fileapproval", "legacy"):
             pending = "srv-1"
             if scenario == "approval":
                 out({"id": pending, "method": "item/commandExecution/requestApproval", "params": {"threadId": thread_id, "turnId": turn_id, "itemId": "cmd2", "command": "rm -rf build", "cwd": cwd, "reason": "clean build"}})
             elif scenario == "fileapproval":
-                out({"id": pending, "method": "item/fileChange/requestApproval", "params": {"threadId": thread_id, "turnId": turn_id, "itemId": "fc1", "changes": [{"path": cwd + "/a.swift", "kind": "update"}]}})
+                # Per schema: paths are announced on the fileChange item; the approval request references itemId only.
+                out({"method": "item/started", "params": {"threadId": thread_id, "turnId": turn_id, "startedAtMs": 0, "item": {"type": "fileChange", "id": "fc1", "status": "inProgress", "changes": [{"path": cwd + "/a.swift", "kind": {"type": "update", "move_path": None}, "diff": "@@"}]}}})
+                out({"id": pending, "method": "item/fileChange/requestApproval", "params": {"threadId": thread_id, "turnId": turn_id, "itemId": "fc1", "startedAtMs": 0, "reason": None, "grantRoot": None}})
             else:
                 out({"id": pending, "method": "execCommandApproval", "params": {"conversationId": thread_id, "callId": "c1", "command": ["git", "push"], "cwd": cwd}})
             continue
