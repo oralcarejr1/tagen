@@ -150,6 +150,10 @@ final class AppController {
     func ensurePanel() -> AssistantPanel {
         if let p = panel { return p }
         let p = AssistantPanel(content: RootView().environmentObject(state).environment(\.appController, self))
+        p.onEscape = { [weak self] in
+            guard let v = self?.voice else { return }
+            Task { await v.send(.cancel) }
+        }
         panel = p
         return p
     }

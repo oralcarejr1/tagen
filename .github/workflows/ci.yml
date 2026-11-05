@@ -12,7 +12,7 @@ defaults:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   linux-core:
@@ -80,6 +80,7 @@ jobs:
           scripts/macos/smoke-launch.sh dist/Tagen.app 2>&1 | tee test-results/smoke-launch.log
       - name: Live GUI check (fixture app, uses runner's existing permissions only)
         continue-on-error: true
+        timeout-minutes: 10
         run: |
           set -o pipefail
           scripts/macos/live-gui-check.sh 2>&1 | tee test-results/live-gui-check.log

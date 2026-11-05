@@ -5,6 +5,9 @@ import SwiftUI
 /// Compact floating assistant: a non-activating panel that can take keyboard focus
 /// (so typing works) without bringing Tagen's other windows forward.
 final class AssistantPanel: NSPanel {
+    /// Called on Esc before the panel hides (cancels listening/speaking).
+    var onEscape: (() -> Void)?
+
     init<Content: View>(content: Content) {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
                    styleMask: [.titled, .closable, .resizable, .fullSizeContentView, .nonactivatingPanel],
@@ -24,7 +27,7 @@ final class AssistantPanel: NSPanel {
     }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-    override func cancelOperation(_ sender: Any?) { orderOut(nil) }
+    override func cancelOperation(_ sender: Any?) { onEscape?(); orderOut(nil) }
 
     /// Place near the top-center of the screen containing the mouse.
     func positionOnActiveScreen() {
